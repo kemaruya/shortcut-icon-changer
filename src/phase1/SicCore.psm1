@@ -23,6 +23,36 @@ public static extern void SHChangeNotify(int wEventId, uint uFlags, System.IntPt
 '@
 }
 
+# Fluent UI Emoji の group（英語）-> 表示用カテゴリ（日本語）。
+$script:SicCategoryJa = @{
+    'Smileys & Emotion' = '顔・感情'
+    'People & Body'     = '人・体'
+    'Animals & Nature'  = '動物・自然'
+    'Food & Drink'      = '食べ物'
+    'Travel & Places'   = '旅行・場所'
+    'Activities'        = 'アクティビティ'
+    'Objects'           = '物'
+    'Symbols'           = '記号'
+    'Flags'             = '旗'
+    'Component'         = '部品'
+}
+
+# 色調タグの表示順（UI のコンボボックス並びにも使う）。
+$script:SicToneOrder = @('赤', '橙', '黄', '緑', '青', '紫', '桃', '茶', '白', '灰', '黒', '多色')
+
+function ConvertTo-SicCategoryJa {
+    [CmdletBinding()]
+    param([string] $Group)
+    if ($Group -and $script:SicCategoryJa.ContainsKey($Group)) { return $script:SicCategoryJa[$Group] }
+    return $Group
+}
+
+function Get-SicToneOrder {
+    [CmdletBinding()]
+    param()
+    return $script:SicToneOrder
+}
+
 function Get-SicRoot {
     [CmdletBinding()]
     param()
@@ -64,18 +94,48 @@ function Get-SicStarterPath {
     return $null
 }
 
+function Get-SicIconIndex {
+    <#
+    .SYNOPSIS
+        スターター/ライブラリ フォルダの icons-index.json を読み込み、名前 -> メタデータの
+        ハッシュテーブルを返す（タグ: category/categoryJa/colors/keywords）。
+    #>
+    [CmdletBinding()]
+    param()
+
+    $map = @{}
+    $files = @()
+    $sp = Get-SicStarterPath; if ($sp) { $files += (Join-Path $sp 'icons-index.json') }
+    $lp = Get-SicLibraryPath; if ($lp) { $files += (Join-Path $lp 'icons-index.json') }
+
+    foreach ($f in $files) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        try {
+            $json = Get-Content -LiteralPath $f -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch { continue }
+        if (-not $json -or -not $json.icons) { continue }
+        foreach ($p in $json.icons.PSObject.Properties) {
+            if (-not $map.ContainsKey($p.Name)) { $map[$p.Name] = $p.Value }
+        }
+    }
+    return $map
+}
+
 function Get-IconLibrary {
     <#
     .SYNOPSIS
         利用可能なアイコン（同梱スターター + 取得済みライブラリ）を列挙する。
     .OUTPUTS
-        PSCustomObject[] : Name, Path, Source('starter'|'library'), Extension
+        PSCustomObject[] : Name, Path, Source('starter'|'library'), Extension,
+                           Category, CategoryJa, Colors(string[]), Keywords(string[])
     #>
     [CmdletBinding()]
     param(
         [string[]] $Extensions = @('.ico', '.png')
     )
 
+    $idx = Get-SicIconIndex
     $results = New-Object System.Collections.Generic.List[object]
     $seen = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::OrdinalIgnoreCase)
 
@@ -91,11 +151,25 @@ function Get-IconLibrary {
             ForEach-Object {
                 $key = $_.BaseName
                 if ($seen.Add($key)) {
+                    $meta = $idx[$key]
+                    $category = ''; $categoryJa = ''
+                    $colors = @(); $keywords = @()
+                    if ($meta) {
+                        if ($meta.PSObject.Properties['category'])   { $category   = [string]$meta.category }
+                        if ($meta.PSObject.Properties['categoryJa']) { $categoryJa = [string]$meta.categoryJa }
+                        if ($meta.PSObject.Properties['colors']   -and $meta.colors)   { $colors   = @($meta.colors) }
+                        if ($meta.PSObject.Properties['keywords'] -and $meta.keywords) { $keywords = @($meta.keywords) }
+                    }
+                    if (-not $categoryJa -and $category) { $categoryJa = ConvertTo-SicCategoryJa $category }
                     $results.Add([PSCustomObject]@{
-                        Name      = $_.BaseName
-                        Path      = $_.FullName
-                        Source    = $s.Source
-                        Extension = $_.Extension.ToLowerInvariant()
+                        Name       = $_.BaseName
+                        Path       = $_.FullName
+                        Source     = $s.Source
+                        Extension  = $_.Extension.ToLowerInvariant()
+                        Category   = $category
+                        CategoryJa = $categoryJa
+                        Colors     = $colors
+                        Keywords   = $keywords
                     })
                 }
             }
@@ -250,6 +324,103 @@ function Get-SicCachedIcon {
     return $dest
 }
 
+function Get-SicDominantColors {
+    <#
+    .SYNOPSIS
+        画像の代表的な色調（日本語タグ）を推定して返す。
+    .DESCRIPTION
+        画像を縮小サンプリングし、各ピクセルを色相/彩度/明度から
+        赤/橙/黄/緑/青/紫/桃/茶/白/灰/黒 に分類して、支配的な色調を最大 $Max 件返す。
+        色味が乏しい場合は無彩色（白/灰/黒）の優勢色を返す。複数の有彩色が強い場合は '多色' を先頭に付ける。
+    .OUTPUTS
+        string[] : 色調タグ（例: @('青','白')）。判定不能時は空配列。
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string] $Path,
+        [int] $Max = 2,
+        [int] $SampleSize = 32
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) { return @() }
+
+    $src = $null; $bmp = $null; $g = $null
+    try {
+        $full = (Resolve-Path -LiteralPath $Path).Path
+        $src = New-Object System.Drawing.Bitmap($full)
+        $bmp = New-Object System.Drawing.Bitmap($SampleSize, $SampleSize, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $g.Clear([System.Drawing.Color]::Transparent)
+        $g.DrawImage($src, 0, 0, $SampleSize, $SampleSize)
+    }
+    catch {
+        if ($g) { $g.Dispose() }; if ($bmp) { $bmp.Dispose() }; if ($src) { $src.Dispose() }
+        return @()
+    }
+    finally {
+        if ($g) { $g.Dispose() }
+        if ($src) { $src.Dispose() }
+    }
+
+    $counts = @{}
+    $opaque = 0
+    try {
+        for ($y = 0; $y -lt $SampleSize; $y++) {
+            for ($x = 0; $x -lt $SampleSize; $x++) {
+                $c = $bmp.GetPixel($x, $y)
+                if ($c.A -lt 128) { continue }
+                $opaque++
+                $h = $c.GetHue()
+                $s = $c.GetSaturation()
+                $l = $c.GetBrightness()
+
+                if ($s -lt 0.18) {
+                    if ($l -gt 0.85) { $tone = '白' }
+                    elseif ($l -lt 0.18) { $tone = '黒' }
+                    else { $tone = '灰' }
+                }
+                elseif (($h -ge 15 -and $h -lt 45) -and $l -lt 0.4) { $tone = '茶' }
+                elseif ($h -lt 15 -or $h -ge 345) { $tone = '赤' }
+                elseif ($h -lt 45) { $tone = '橙' }
+                elseif ($h -lt 70) { $tone = '黄' }
+                elseif ($h -lt 165) { $tone = '緑' }
+                elseif ($h -lt 265) { $tone = '青' }
+                elseif ($h -lt 295) { $tone = '紫' }
+                else { $tone = '桃' }
+
+                if ($counts.ContainsKey($tone)) { $counts[$tone]++ } else { $counts[$tone] = 1 }
+            }
+        }
+    }
+    finally { $bmp.Dispose() }
+
+    if ($opaque -eq 0) { return @() }
+
+    $colorKeys = @('赤', '橙', '黄', '緑', '青', '紫', '桃', '茶')
+    $coloredTotal = 0
+    foreach ($k in $colorKeys) { if ($counts.ContainsKey($k)) { $coloredTotal += $counts[$k] } }
+
+    $result = New-Object System.Collections.Generic.List[string]
+    if ($coloredTotal -ge ($opaque * 0.12)) {
+        $sorted = @($counts.GetEnumerator() | Where-Object { $colorKeys -contains $_.Key } | Sort-Object Value -Descending)
+        $strong = @($sorted | Where-Object { $_.Value -ge ($coloredTotal * 0.20) })
+        $added = 0
+        foreach ($e in $sorted) {
+            if ($added -ge $Max) { break }
+            if ($e.Value -ge ($coloredTotal * 0.20)) { [void]$result.Add($e.Key); $added++ }
+        }
+        if ($added -eq 0 -and $sorted.Count -gt 0) { [void]$result.Add($sorted[0].Key) }
+        if ($strong.Count -ge 3) { $result.Insert(0, '多色') }
+    }
+    else {
+        $neutral = @($counts.GetEnumerator() | Where-Object { @('白', '灰', '黒') -contains $_.Key } | Sort-Object Value -Descending)
+        if ($neutral.Count -gt 0) { [void]$result.Add($neutral[0].Key) }
+    }
+
+    return $result.ToArray()
+}
+
 function Update-ShellIconCache {
     [CmdletBinding()]
     param()
@@ -309,8 +480,52 @@ function Set-ShortcutIcon {
     }
 }
 
+function Reset-ShortcutIcon {
+    <#
+    .SYNOPSIS
+        指定したショートカット (.lnk) のアイコンを既定（ターゲット本来のアイコン）に戻す。
+    .DESCRIPTION
+        IconLocation を空パス・索引 0（",0"）に設定して保存し、独自アイコン指定を解除する。
+        WScript.Shell は空文字 "" を拒否するため、空パス + ",0" を用いる。
+    .PARAMETER LnkPath
+        対象の .lnk ファイル。
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory)] [string] $LnkPath
+    )
+
+    if (-not (Test-Path -LiteralPath $LnkPath)) {
+        throw "ショートカットが見つかりません: $LnkPath"
+    }
+    $lnkFull = (Resolve-Path -LiteralPath $LnkPath).Path
+    if ([System.IO.Path]::GetExtension($lnkFull).ToLowerInvariant() -ne '.lnk') {
+        throw "対象は .lnk ファイルではありません: $lnkFull"
+    }
+
+    if ($PSCmdlet.ShouldProcess($lnkFull, "IconLocation を既定に戻す")) {
+        $shell = New-Object -ComObject WScript.Shell
+        try {
+            $sc = $shell.CreateShortcut($lnkFull)
+            $sc.IconLocation = ",0"
+            $sc.Save()
+        }
+        finally {
+            [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+        }
+        Update-ShellIconCache
+    }
+
+    return [PSCustomObject]@{
+        LnkPath  = $lnkFull
+        IconPath = ''
+        Index    = 0
+    }
+}
+
 Export-ModuleMember -Function @(
     'Get-SicRoot', 'Get-SicLibraryPath', 'Get-SicCachePath', 'Get-SicStarterPath',
-    'Get-IconLibrary', 'Convert-ToIco', 'Get-SicCachedIcon',
-    'Update-ShellIconCache', 'Set-ShortcutIcon'
+    'Get-SicIconIndex', 'ConvertTo-SicCategoryJa', 'Get-SicToneOrder',
+    'Get-IconLibrary', 'Convert-ToIco', 'Get-SicCachedIcon', 'Get-SicDominantColors',
+    'Update-ShellIconCache', 'Set-ShortcutIcon', 'Reset-ShortcutIcon'
 )
