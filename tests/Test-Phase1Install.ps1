@@ -6,6 +6,7 @@
     - Install.ps1 を一時インストール先で実行し、ファイル配置とレジストリ verb を検証
     - Launch-IconPicker.ps1 -IconPath で UI なしのアイコン適用を検証
     - IconPicker の Show-SicIconPicker -NoShow を STA で構築できることを検証
+    - アイコンのクリック発火で選択パスが Window.Tag に入ることを検証 (回帰テスト)
     - Uninstall.ps1 で後始末
     実行は powershell.exe (5.1) を推奨。成功で exit 0。
 #>
@@ -90,6 +91,27 @@ exit 0
     Set-Content -LiteralPath $probeFile -Value $pickerProbe -Encoding UTF8
     & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $probeFile
     Assert ($LASTEXITCODE -eq 0) "Show-SicIconPicker -NoShow が STA で例外なく構築できた"
+
+    # --- 4b) 実クリックで選択パスが Window.Tag に入る (回帰: ShowDialog/Selected 例外) ---
+    $clickProbe = @"
+Import-Module '$installDir\SicCore.psm1' -Force
+. '$installDir\IconPicker.ps1'
+Add-Type -AssemblyName PresentationFramework
+`$win = New-SicIconPickerWindow -LnkPath '$lnk'
+`$panel = `$win.FindName('IconPanel')
+`$btn = `$null
+foreach (`$c in `$panel.Children) { if (`$c -is [System.Windows.Controls.Button]) { `$btn = `$c; break } }
+if (-not `$btn) { Write-Host 'NO_BUTTON'; exit 2 }
+`$expected = `$btn.Tag
+`$btn.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+if (`$win.Tag -and `$win.Tag -eq `$expected) { Write-Host ("PICKED=" + `$win.Tag); exit 0 }
+Write-Host ("BAD_TAG=[" + `$win.Tag + "]"); exit 3
+"@
+    $clickFile = Join-Path $work 'clickprobe.ps1'
+    Set-Content -LiteralPath $clickFile -Value $clickProbe -Encoding UTF8
+    $clickOut = & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $clickFile 2>&1
+    Write-Host ("  " + ($clickOut -join ' '))
+    Assert ($LASTEXITCODE -eq 0) "アイコンのクリックで選択パスが Window.Tag に入る (回帰テスト)"
 }
 finally {
     # --- 後始末（アンインストール） ---------------------------------------

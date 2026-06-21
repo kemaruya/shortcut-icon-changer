@@ -16,19 +16,19 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms  # OpenFileDialog 用
 
-function Show-SicIconPicker {
+function New-SicIconPickerWindow {
     <#
     .SYNOPSIS
-        アイコンピッカーを表示し、選択されたアイコンファイルのパスを返す（キャンセル時 $null）。
+        アイコンピッカーのウィンドウを構築して返す（ShowDialog はしない）。
+    .DESCRIPTION
+        選択結果はウィンドウの Tag プロパティ（アイコンのパス）に格納される。
+        キャンセル/×ボタンの場合は Tag は $null のまま。自動テストからも利用する。
     .PARAMETER LnkPath
         対象の .lnk（タイトル表示用）。
-    .PARAMETER NoShow
-        ウィンドウを表示せず構築のみ行う（自動テスト用）。$null を返す。
     #>
     [CmdletBinding()]
     param(
-        [string] $LnkPath,
-        [switch] $NoShow
+        [string] $LnkPath
     )
 
     $targetName = if ($LnkPath) { [System.IO.Path]::GetFileName($LnkPath) } else { '(ショートカット)' }
@@ -71,9 +71,7 @@ function Show-SicIconPicker {
 
     $headerText.Text = "「$targetName」に設定するアイコンを選んでください。"
 
-    # 選択結果を保持
-    $state = [pscustomobject]@{ Selected = $null }
-
+    # 選択結果はウィンドウの Tag に格納する（イベント ハンドラからは sender 経由で参照）。
     $library = @(Get-IconLibrary)
     $maxItems = 300
 
@@ -130,12 +128,15 @@ function Show-SicIconPicker {
             [void]$sp.Children.Add($label)
             $btn.Content = $sp
 
+            # このハンドラは子スコープ ($buildItems) 内で生成されるため、親スコープの
+            # 変数は .GetNewClosure() では捕捉できず、WPF のイベント実行時に失われる。
+            # sender からウィンドウを辿り、結果は Window.Tag に格納して閉じる。
             $btn.Add_Click({
                 param($s, $e)
-                $state.Selected = $s.Tag
-                $window.DialogResult = $true
-                $window.Close()
-            }.GetNewClosure())
+                $win = [System.Windows.Window]::GetWindow($s)
+                $win.Tag = $s.Tag
+                $win.Close()
+            })
 
             [void]$iconPanel.Children.Add($btn)
         }
@@ -144,30 +145,50 @@ function Show-SicIconPicker {
         if ($items.Count -gt $shown.Count) {
             $statusText.Text = "{0} 件中 {1} 件を表示（絞り込んでください）" -f $items.Count, $shown.Count
         }
-    }
+    }.GetNewClosure()
 
     $searchBox.Add_TextChanged({ & $buildItems $searchBox.Text.Trim() }.GetNewClosure())
 
     $customBtn.Add_Click({
+        param($s, $e)
         $dlg = New-Object System.Windows.Forms.OpenFileDialog
         $dlg.Filter = "アイコン画像 (*.ico;*.png;*.exe;*.dll)|*.ico;*.png;*.exe;*.dll|すべてのファイル (*.*)|*.*"
         $dlg.Title = "アイコンファイルを選択"
         if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-            $state.Selected = $dlg.FileName
-            $window.DialogResult = $true
-            $window.Close()
+            $win = [System.Windows.Window]::GetWindow($s)
+            $win.Tag = $dlg.FileName
+            $win.Close()
         }
-    }.GetNewClosure())
+    })
 
-    $cancelBtn.Add_Click({ $window.DialogResult = $false; $window.Close() }.GetNewClosure())
+    $cancelBtn.Add_Click({
+        param($s, $e)
+        [System.Windows.Window]::GetWindow($s).Close()
+    })
 
     & $buildItems ''
 
-    if ($NoShow) {
-        # 自動テスト用: 構築のみ確認して閉じずに $null を返す
-        return $null
-    }
+    return $window
+}
+
+function Show-SicIconPicker {
+    <#
+    .SYNOPSIS
+        アイコンピッカーを表示し、選択されたアイコンファイルのパスを返す（キャンセル時 $null）。
+    .PARAMETER LnkPath
+        対象の .lnk（タイトル表示用）。
+    .PARAMETER NoShow
+        ウィンドウを表示せず構築のみ行う（自動テスト用）。$null を返す。
+    #>
+    [CmdletBinding()]
+    param(
+        [string] $LnkPath,
+        [switch] $NoShow
+    )
+
+    $window = New-SicIconPickerWindow -LnkPath $LnkPath
+    if ($NoShow) { return $null }
 
     [void]$window.ShowDialog()
-    return $state.Selected
+    return $window.Tag
 }
