@@ -91,6 +91,7 @@ namespace Sic.App.ViewModels
             IsJapanese = Loc.IsJapanese((AppLanguage)_languageChoice);
             Strings = IsJapanese ? UiStrings.Japanese() : UiStrings.English();
             NoteText = HasLnk ? "" : Strings.NoLnkNote;
+            ContextMenu.TryUpdateLabel(IsJapanese);
             OnPropertyChanged(nameof(Strings));
             OnPropertyChanged(nameof(IsJapanese));
         }

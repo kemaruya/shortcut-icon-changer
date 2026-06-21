@@ -2,7 +2,7 @@
 
 Windows のショートカット (`.lnk`) のアイコンを、右クリックメニューから手軽に・カラフルに変更するツールです。OS 標準アイコン (imageres.dll / shell32.dll) は色調が統一されていて数も限られるため、内容を見た目で判断しづらいという課題を解決します。
 
-> 状態: **Phase 1 実装中**（Windows 11 標準機能のみ・追加ランタイム/ビルド/署名は不要）
+> 状態: **Phase 1 リリース済み**（v0.4.0・Windows 11 標準機能のみ・追加ランタイム/ビルド/署名は不要）／**Phase 2 ネイティブアプリ + MSI 追加**（v0.5.0・下記参照）
 
 ## 特長
 
@@ -80,9 +80,38 @@ Reset-ShortcutIcon -LnkPath "C:\path\to\App.lnk"
 
 右クリックメニューから既定に戻す場合は、ピッカーの「既定に戻す」ボタンを使うか、`Launch-IconPicker.ps1 -LnkPath <.lnk> -Reset` を実行します。
 
+## Phase 2: ネイティブアプリ + MSI インストーラー（v0.5.0）
+
+Phase 1 の PowerShell + WPF 実装を、**C# のネイティブ WPF アプリ（.NET Framework 4.8）** と **WiX 製のユーザー単位 MSI インストーラー** に刷新したものです。Phase 1 と同じく **追加ランタイムは不要**（.NET Framework 4.8 は Windows 11 に同梱）で、検証 VM での「前提インストール不要」という性質を保っています。
+
+### Phase 2 の追加点
+
+- **ネイティブ アプリ化**: 起動を `powershell.exe` ではなく単一の `ShortcutIconChanger.exe`（WPF）に変更。同じ 900 種スターターアイコン・タグクラウド絞り込み・キーワード検索・「既定に戻す」を備えます
+- **多言語対応（日本語 / 英語）**: UI 文言・アイコン表示名を日本語/英語で切り替え。**既定はユーザーの表示言語に追従**し、**日本語環境では日本語、それ以外の環境では英語へフォールバック**します。アイコン名は Unicode CLDR の日本語注釈から生成した固有名（例: `Rocket` →「ロケット」、`Rocket (フラット)` →「ロケット（フラット）」）を内蔵
+- **MSI インストーラー（WiX 6）**: 管理者権限不要の **ユーザー単位 MSI**。右クリック動詞の登録/解除をインストーラーが管理し、アンインストールで残留物を残しません
+
+### インストール（MSI）
+
+[Releases](https://github.com/kemaruya/shortcut-icon-changer/releases) から `ShortcutIconChanger-X.Y.Z-perUser.msi` を入手し、ダブルクリック（またはサイレント `msiexec /i ShortcutIconChanger-0.5.0-perUser.msi /qn`）でインストールします。管理者権限・UAC は不要です。`%LOCALAPPDATA%\Programs\ShortcutIconChanger` に導入され、`.lnk` の右クリックメニューに「アイコンを変更」が登録されます。
+
+アンインストールは「アプリと機能」から、またはサイレントに `msiexec /x ShortcutIconChanger-0.5.0-perUser.msi /qn` で行えます。
+
+### ビルド（開発者向け）
+
+```powershell
+# スターターアイコンの日本語名を生成（index を v3 化・要ネットワーク。通常は同梱済みのため不要）
+powershell.exe -ExecutionPolicy Bypass -File .\tools\Build-NamesJa.ps1
+
+# Release ビルド → ステージング → WiX で MSI 生成
+powershell.exe -ExecutionPolicy Bypass -File .\build\Build-Phase2.ps1
+# → dist\ShortcutIconChanger-X.Y.Z-perUser.msi を出力（-RunTests で Core テストも実行）
+```
+
+> ビルドには Visual Studio 2022/2026（MSBuild）と WiX 6 グローバル ツール（`dotnet tool install --global wix`）が必要です。エンドユーザーの実行環境には不要です。
+
 ## アーキテクチャ / 設計
 
-[docs/architecture.md](docs/architecture.md) を参照してください。Phase 2（.NET Native AOT による `IExplorerCommand` モダンメニュー対応）の設計もここにまとめます。
+[docs/architecture.md](docs/architecture.md) を参照してください。Phase 2（ネイティブ WPF アプリ + WiX ユーザー単位 MSI + 日本語/英語 i18n）の構成もここにまとめます。
 
 ## ライセンス
 

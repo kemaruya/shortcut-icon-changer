@@ -1,5 +1,6 @@
 using System.Linq;
 using Sic.Core;
+using Sic.Core.Localization;
 using Xunit;
 
 namespace Sic.Core.Tests
@@ -52,6 +53,41 @@ namespace Sic.Core.Tests
                 Assert.True(idx.Count > 100, $"index エントリが少ない: {idx.Count}");
                 Assert.Contains(idx.Values, m => !string.IsNullOrEmpty(m.Category));
                 Assert.Contains(idx.Values, m => !string.IsNullOrEmpty(m.Style));
+            }
+            finally { SicPaths.StarterPathOverride = null; }
+        }
+
+        [Fact]
+        public void DisplayName_JapaneseNames_AreLocalizedWithStyleSuffix()
+        {
+            var assets = TestHelpers.RepoAssets();
+            Assert.True(assets != null, "リポジトリの assets\\starter-icons が見つかりません。");
+
+            SicPaths.StarterPathOverride = assets;
+            try
+            {
+                var lib = IconLibrary.Enumerate();
+
+                // index v3: ほぼ全エントリに日本語固有名 (nameJa) が付与されている。
+                var withJa = lib.Count(i => !string.IsNullOrEmpty(i.NameJa));
+                Assert.True(withJa >= lib.Count * 0.9,
+                    $"nameJa の付与が少ない: {withJa}/{lib.Count}");
+
+                // 3D「Rocket」: 接尾辞なし。EN=Rocket / JA=ロケット。
+                var rocket3d = lib.First(i => i.Name == "Rocket");
+                Assert.Equal("ロケット", rocket3d.NameJa);
+                Assert.Equal("Rocket", Loc.DisplayName(rocket3d, ja: false));
+                Assert.Equal("ロケット", Loc.DisplayName(rocket3d, ja: true));
+
+                // フラット「Rocket (フラット)」: EN=Rocket (Flat) / JA=ロケット（フラット）。
+                var rocketFlat = lib.First(i => i.Name == "Rocket (フラット)");
+                Assert.Equal("ロケット", rocketFlat.NameJa);
+                Assert.Equal("Rocket (Flat)", Loc.DisplayName(rocketFlat, ja: false));
+                Assert.Equal("ロケット（フラット）", Loc.DisplayName(rocketFlat, ja: true));
+
+                // 日本語名が無い項目は英語ベース名へフォールバックする（例外を出さない）。
+                var noJa = new IconItem { Name = "Custom", NameEnBase = "Custom", Style = "3D", StyleJa = "3D" };
+                Assert.Equal("Custom", Loc.DisplayName(noJa, ja: true));
             }
             finally { SicPaths.StarterPathOverride = null; }
         }
