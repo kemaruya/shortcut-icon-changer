@@ -19,14 +19,17 @@ namespace Sic.Core.Tests
             {
                 var lib = IconLibrary.Enumerate();
 
-                // 3D / フラット / ハイコントラスト 各 300 種（計 900）
-                Assert.True(lib.Count >= 600, $"想定より少ない: {lib.Count}");
+                // 既定では 3D / フラットを表示（ハイコントラストは非表示）。各 300 種想定。
+                Assert.True(lib.Count >= 400, $"想定より少ない: {lib.Count}");
 
                 var styles = lib.Select(i => i.StyleJa).Where(s => !string.IsNullOrEmpty(s))
                                 .Distinct().ToList();
                 Assert.Contains("3D", styles);
                 Assert.Contains("フラット", styles);
-                Assert.Contains("ハイコントラスト", styles);
+
+                // ハイコントラストは既定で非表示（アセットは残るがアプリには出さない）。
+                Assert.DoesNotContain("ハイコントラスト", styles);
+                Assert.DoesNotContain(lib, i => i.Style == "High Contrast");
 
                 // メタデータ付与（ジャンル日本語・色調）
                 Assert.Contains(lib, i => !string.IsNullOrEmpty(i.CategoryJa));
@@ -37,6 +40,39 @@ namespace Sic.Core.Tests
                 Assert.NotNull(flat);
                 Assert.DoesNotContain("フラット", flat!.NameEnBase);
                 Assert.Contains("フラット", flat.Name);
+            }
+            finally { SicPaths.StarterPathOverride = null; }
+        }
+
+        [Fact]
+        public void Enumerate_HidesHighContrastByDefault_ButAssetsRemain()
+        {
+            var assets = TestHelpers.RepoAssets();
+            Assert.True(assets != null, "リポジトリの assets\\starter-icons が見つかりません。");
+
+            SicPaths.StarterPathOverride = assets;
+            try
+            {
+                // 既定: ハイコントラストは列挙されない（アプリから不可視）。
+                var visible = IconLibrary.Enumerate();
+                Assert.DoesNotContain(visible, i => i.Style == "High Contrast");
+
+                // HiddenStyles を一時的に外すとハイコントラストが戻る
+                // ＝ アセット/インデックスは削除しておらず健在であることの証明。
+                var saved = IconLibrary.HiddenStyles.ToList();
+                IconLibrary.HiddenStyles.Clear();
+                try
+                {
+                    var all = IconLibrary.Enumerate();
+                    Assert.Contains(all, i => i.Style == "High Contrast");
+                    Assert.True(all.Count > visible.Count,
+                        $"ハイコントラストを戻すと増えるはず: {all.Count} > {visible.Count}");
+                }
+                finally
+                {
+                    IconLibrary.HiddenStyles.Clear();
+                    foreach (var s in saved) IconLibrary.HiddenStyles.Add(s);
+                }
             }
             finally { SicPaths.StarterPathOverride = null; }
         }

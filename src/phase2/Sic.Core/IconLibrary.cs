@@ -13,6 +13,14 @@ namespace Sic.Core
     {
         private static readonly string[] DefaultExts = { ".ico", ".png" };
 
+        /// <summary>
+        /// 既定でアプリから非表示にするスタイル（正規＝英語キー）。アセットとインデックスは残すが、
+        /// 列挙から除外して一覧・ファセット・検索のいずれにも出さない。
+        /// ハイコントラストは使用率が低いため既定で非表示。
+        /// </summary>
+        public static readonly ISet<string> HiddenStyles =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "High Contrast" };
+
         public static List<IconItem> Enumerate(string[]? extensions = null)
         {
             var exts = new HashSet<string>(
@@ -38,9 +46,16 @@ namespace Sic.Core
                     if (!exts.Contains(ext)) continue;
 
                     var key = Path.GetFileNameWithoutExtension(file);
-                    if (!seen.Add(key)) continue; // first wins (OrdinalIgnoreCase)
 
                     idx.TryGetValue(key, out var meta);
+
+                    // 既定で非表示のスタイル（例: ハイコントラスト）はアプリから除外する。
+                    // アセット/インデックスは残すが、一覧・ファセット・検索のいずれにも出さない。
+                    var styleKey = meta?.Style ?? "";
+                    if (!string.IsNullOrEmpty(styleKey) && HiddenStyles.Contains(styleKey))
+                        continue;
+
+                    if (!seen.Add(key)) continue; // first wins (OrdinalIgnoreCase)
 
                     var item = new IconItem
                     {
