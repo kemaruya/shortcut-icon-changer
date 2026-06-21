@@ -38,6 +38,18 @@ try {
     $starterCount = (Get-ChildItem (Join-Path $installDir 'assets\starter-icons') -Filter *.png -ErrorAction SilentlyContinue).Count
     Assert ($starterCount -gt 0) "スターターアイコンがコピーされた ($starterCount 件)"
 
+    # --- 1b) インストール先モジュールがライブラリを列挙できるか（空リスト回帰防止） ---
+    $libProbe = @"
+Import-Module '$installDir\SicCore.psm1' -Force
+@(Get-IconLibrary).Count
+"@
+    $libProbeFile = Join-Path $work 'libprobe.ps1'
+    Set-Content -LiteralPath $libProbeFile -Value $libProbe -Encoding UTF8
+    $libOut = & $psExe -NoProfile -ExecutionPolicy Bypass -File $libProbeFile
+    $libCount = [int]($libOut | Select-Object -Last 1)
+    Write-Host "  Get-IconLibrary (installed layout) = $libCount"
+    Assert ($libCount -ge $starterCount) "インストール先モジュールがスターターアイコンを列挙できる ($libCount 件)"
+
     # --- 2) レジストリ verb ------------------------------------------------
     Assert (Test-Path $verbKey) "レジストリ verb が作成された"
     $verbDefault = (Get-ItemProperty -Path $verbKey).'(default)'

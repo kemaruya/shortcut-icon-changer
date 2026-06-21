@@ -178,7 +178,13 @@ SourceFiles0=$sfxSrc\
 %FILE1%=
 "@
         $sedPath = Join-Path $sfxSrc 'package.sed'
-        [System.IO.File]::WriteAllText($sedPath, $sed, (New-Object System.Text.UTF8Encoding($false)))
+        # IExpress は SED を ANSI（システム既定コードページ）として読み込むため、
+        # 日本語を含む SED は UTF-8 ではなく ACP（日本語環境なら cp932）で書き出す。
+        # UTF-8 で書くと FinishMessage 等が文字化けする。
+        $acp = $null
+        try { $acp = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -Name ACP -ErrorAction Stop).ACP } catch { }
+        $sedEnc = if ($acp) { [System.Text.Encoding]::GetEncoding([int]$acp) } else { [System.Text.Encoding]::Default }
+        [System.IO.File]::WriteAllText($sedPath, $sed, $sedEnc)
 
         if (Test-Path $exePath) { Remove-Item $exePath -Force }
         Write-Host "IExpress で自己解凍 EXE を生成中..."

@@ -50,9 +50,17 @@ function Get-SicCachePath {
 function Get-SicStarterPath {
     [CmdletBinding()]
     param()
-    # モジュールからの相対: <repo>\src\phase1\SicCore.psm1 -> <repo>\assets\starter-icons
-    $candidate = Join-Path $PSScriptRoot '..\..\assets\starter-icons'
-    if (Test-Path $candidate) { return (Resolve-Path $candidate).Path }
+    # 同梱スターターアイコンの場所をレイアウト非依存で解決する。
+    #   インストール後 : <installDir>\SicCore.psm1      -> <installDir>\assets\starter-icons
+    #   リポジトリ     : <repo>\src\phase1\SicCore.psm1 -> <repo>\assets\starter-icons
+    $candidates = @(
+        (Join-Path $PSScriptRoot 'assets\starter-icons'),       # インストール後レイアウト
+        (Join-Path $PSScriptRoot '..\..\assets\starter-icons'), # リポジトリレイアウト
+        (Join-Path $PSScriptRoot '..\assets\starter-icons')     # 予備
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) { return (Resolve-Path $candidate).Path }
+    }
     return $null
 }
 
