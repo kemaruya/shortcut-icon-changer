@@ -58,6 +58,10 @@ if (-not (Test-Path $versionFile)) { $versionFile = Join-Path $here '..\..\VERSI
 $version = if (Test-Path $versionFile) { (Get-Content $versionFile -Raw).Trim() } else { 'dev' }
 Set-Content -Path (Join-Path $InstallDir 'VERSION') -Value $version -NoNewline -Encoding ascii
 
+# ダウンロード由来の Mark-of-the-Web を除去（インストール先のスクリプトを警告なく実行できるように）
+Get-ChildItem -LiteralPath $InstallDir -Recurse -File -ErrorAction SilentlyContinue |
+    Unblock-File -ErrorAction SilentlyContinue
+
 # --- レジストリ verb 登録 (HKCU) ----------------------------------------
 $verbKey = 'HKCU:\Software\Classes\lnkfile\shell\sic.ChangeIcon'
 $cmdKey = "$verbKey\command"
