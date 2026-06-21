@@ -36,7 +36,7 @@ function New-SicIconPickerWindow {
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="アイコンを変更" Height="640" Width="860"
+        Title="アイコンを変更" Height="660" Width="860"
         WindowStartupLocation="CenterScreen" Background="#FAFAFA">
   <Window.Resources>
     <Style TargetType="ToggleButton">
@@ -76,20 +76,32 @@ function New-SicIconPickerWindow {
         <Button x:Name="ClearTagsButton" DockPanel.Dock="Right" Content="タグをクリア"
                 Width="100" Height="28" Margin="6,0,0,0"
                 ToolTip="選択中のタグをすべて解除します"/>
-        <TextBox x:Name="SearchBox" Height="28" VerticalContentAlignment="Center"
-                 FontSize="13" Padding="6,0,0,0"
-                 ToolTip="名前・キーワードで絞り込み（例: rocket, folder, star）"/>
+        <TextBlock DockPanel.Dock="Left" Text="絞り込み" FontSize="12" FontWeight="SemiBold"
+                   Foreground="#555" VerticalAlignment="Center" Margin="2,0,8,0"/>
+        <Grid>
+          <TextBox x:Name="SearchBox" Height="28" VerticalContentAlignment="Center"
+                   FontSize="13" Padding="6,0,0,0"
+                   ToolTip="名前・キーワードで絞り込み（例: rocket, folder, star）"/>
+          <TextBlock x:Name="SearchPlaceholder" IsHitTestVisible="False" Foreground="#9AA0A6"
+                     FontSize="12.5" VerticalAlignment="Center" Margin="9,0,0,0"
+                     Text="ここに入力して名前・キーワードで絞り込み（例: rocket / 星 / フォルダ）"/>
+        </Grid>
       </DockPanel>
       <Border Background="#F2F5F8" BorderBrush="#E2E2E2" BorderThickness="1" CornerRadius="6" Padding="8,6">
         <StackPanel>
           <DockPanel>
             <TextBlock DockPanel.Dock="Left" Text="スタイル" FontSize="11" Foreground="#888"
-                       VerticalAlignment="Center" Width="46" Margin="0,0,4,0"/>
+                       VerticalAlignment="Center" Width="52" Margin="0,0,4,0"/>
+            <WrapPanel x:Name="StylePanel"/>
+          </DockPanel>
+          <DockPanel Margin="0,6,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="ジャンル" FontSize="11" Foreground="#888"
+                       VerticalAlignment="Center" Width="52" Margin="0,0,4,0"/>
             <WrapPanel x:Name="CategoryPanel"/>
           </DockPanel>
           <DockPanel Margin="0,6,0,0">
             <TextBlock DockPanel.Dock="Left" Text="色調" FontSize="11" Foreground="#888"
-                       VerticalAlignment="Center" Width="46" Margin="0,0,4,0"/>
+                       VerticalAlignment="Center" Width="52" Margin="0,0,4,0"/>
             <WrapPanel x:Name="ColorPanel"/>
           </DockPanel>
         </StackPanel>
@@ -115,6 +127,8 @@ function New-SicIconPickerWindow {
 
     $headerText    = $window.FindName('HeaderText')
     $searchBox     = $window.FindName('SearchBox')
+    $searchPlaceholder = $window.FindName('SearchPlaceholder')
+    $stylePanel    = $window.FindName('StylePanel')
     $categoryPanel = $window.FindName('CategoryPanel')
     $colorPanel    = $window.FindName('ColorPanel')
     $clearBtn      = $window.FindName('ClearTagsButton')
@@ -148,7 +162,24 @@ function New-SicIconPickerWindow {
         return [Math]::Round(11.0 + $t * 6.0, 1)
     }
 
-    # スタイル（カテゴリ）チップ — 件数の多い順
+    # スタイル チップ（3D / フラット / ハイコントラスト）— 定義順
+    $styleOrder = @(Get-SicStyleOrder)
+    $styleGroups = @($library | Where-Object { $_.StyleJa } | Group-Object StyleJa |
+        Sort-Object @{ Expression = { [array]::IndexOf($styleOrder, $_.Name) } })
+    if ($styleGroups.Count -gt 0) {
+        $stMax = ($styleGroups | Measure-Object Count -Maximum).Maximum
+        $stMin = ($styleGroups | Measure-Object Count -Minimum).Minimum
+        foreach ($g in $styleGroups) {
+            $chip = New-Object System.Windows.Controls.Primitives.ToggleButton
+            $chip.Content = "{0} ({1})" -f $g.Name, $g.Count
+            $chip.Tag = [string]$g.Name
+            $chip.FontSize = & $scaleFont $g.Count $stMin $stMax
+            $chip.ToolTip = "スタイル: $($g.Name)"
+            [void]$stylePanel.Children.Add($chip)
+        }
+    }
+
+    # ジャンル チップ — 件数の多い順
     $catGroups = @($library | Where-Object { $_.CategoryJa } | Group-Object CategoryJa | Sort-Object Count -Descending)
     if ($catGroups.Count -gt 0) {
         $catMax = ($catGroups | Measure-Object Count -Maximum).Maximum
@@ -158,7 +189,7 @@ function New-SicIconPickerWindow {
             $chip.Content = "{0} ({1})" -f $g.Name, $g.Count
             $chip.Tag = [string]$g.Name
             $chip.FontSize = & $scaleFont $g.Count $catMin $catMax
-            $chip.ToolTip = "スタイル: $($g.Name)"
+            $chip.ToolTip = "ジャンル: $($g.Name)"
             [void]$categoryPanel.Children.Add($chip)
         }
     }
@@ -209,7 +240,15 @@ function New-SicIconPickerWindow {
 
     $buildItems = {
         $nameFilter = $searchBox.Text.Trim()
+        # 検索ボックスのプレースホルダ（注釈）は未入力のときだけ表示する
+        if ($searchBox.Text.Length -gt 0) {
+            $searchPlaceholder.Visibility = [System.Windows.Visibility]::Collapsed
+        } else {
+            $searchPlaceholder.Visibility = [System.Windows.Visibility]::Visible
+        }
         # ON になっているチップ（タグ）を facet ごとに集める
+        $enabledStyles = @()
+        foreach ($c in $stylePanel.Children) { if ($c.IsChecked) { $enabledStyles += [string]$c.Tag } }
         $enabledCats = @()
         foreach ($c in $categoryPanel.Children) { if ($c.IsChecked) { $enabledCats += [string]$c.Tag } }
         $enabledCols = @()
@@ -221,10 +260,15 @@ function New-SicIconPickerWindow {
             $items = $items | Where-Object {
                 ($_.Name -like "*$nameFilter*") -or
                 ($_.CategoryJa -and $_.CategoryJa -like "*$nameFilter*") -or
+                ($_.StyleJa -and $_.StyleJa -like "*$nameFilter*") -or
                 ($_.Keywords -and ((@($_.Keywords) -join ' ') -like "*$nameFilter*"))
             }
         }
         # facet 内は OR、facet をまたぐと AND
+        if ($enabledStyles.Count -gt 0) {
+            # スタイル未設定（ユーザー追加の .ico/.png）は常に通す
+            $items = $items | Where-Object { (-not $_.StyleJa) -or ($enabledStyles -contains $_.StyleJa) }
+        }
         if ($enabledCats.Count -gt 0) {
             $items = $items | Where-Object { $enabledCats -contains $_.CategoryJa }
         }
@@ -251,7 +295,10 @@ function New-SicIconPickerWindow {
             $btn.Width = 92; $btn.Height = 104; $btn.Margin = '4'
             $btn.Background = 'White'; $btn.BorderBrush = '#DDD'
             $tip = $icon.Name
-            if ($icon.CategoryJa) { $tip += "`n[" + $icon.CategoryJa + "]" }
+            $tipMeta = @()
+            if ($icon.CategoryJa) { $tipMeta += [string]$icon.CategoryJa }
+            if ($icon.StyleJa)    { $tipMeta += [string]$icon.StyleJa }
+            if ($tipMeta.Count -gt 0) { $tip += "`n[" + ($tipMeta -join '・') + "]" }
             if (@($icon.Colors).Count -gt 0) { $tip += ' ' + (@($icon.Colors) -join '/') }
             $btn.ToolTip = $tip
             $btn.Tag = $icon.Path
@@ -303,12 +350,14 @@ function New-SicIconPickerWindow {
 
     # 各タグ チップの Click で再描画。ハンドラは関数スコープで生成し $buildItems を捕捉する。
     $rebuild = { & $buildItems }.GetNewClosure()
+    foreach ($c in $stylePanel.Children) { $c.Add_Click($rebuild) }
     foreach ($c in $categoryPanel.Children) { $c.Add_Click($rebuild) }
     foreach ($c in $colorPanel.Children) { $c.Add_Click($rebuild) }
 
     # タグをクリア: 全チップを解除して再描画
     $clearBtn.Add_Click({
         param($s, $e)
+        foreach ($c in $stylePanel.Children) { $c.IsChecked = $false }
         foreach ($c in $categoryPanel.Children) { $c.IsChecked = $false }
         foreach ($c in $colorPanel.Children) { $c.IsChecked = $false }
         & $buildItems
