@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Sic.App.Interop;
 using Sic.App.ViewModels;
 
@@ -9,6 +10,7 @@ namespace Sic.App
     public partial class MainWindow : Window
     {
         private readonly MainViewModel _vm;
+        private readonly DispatcherTimer _resizeTimer;
 
         public PickResult? Result { get; private set; }
 
@@ -18,6 +20,22 @@ namespace Sic.App
             _vm = vm;
             DataContext = vm;
             vm.RequestClose += OnRequestClose;
+
+            // リサイズの嵐を間引いてから列数を再計算する。
+            _resizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            _resizeTimer.Tick += (_, __) => { _resizeTimer.Stop(); PushViewportWidth(); };
+            Loaded += (_, __) => PushViewportWidth();
+        }
+
+        private void PushViewportWidth()
+        {
+            if (IconList != null && IconList.ActualWidth > 0)
+                _vm.SetViewportWidth(IconList.ActualWidth);
+        }
+
+        private void IconList_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (e.WidthChanged) { _resizeTimer.Stop(); _resizeTimer.Start(); }
         }
 
         private void OnRequestClose(PickResult r)

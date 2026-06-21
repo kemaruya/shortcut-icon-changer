@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Sic.Core;
@@ -20,7 +21,7 @@ namespace Sic.App.ViewModels
                 if (!_loaded)
                 {
                     _loaded = true;
-                    _thumb = LoadThumb(Item.Path);
+                    _thumb = LoadThumb(Item);
                 }
                 return _thumb;
             }
@@ -32,13 +33,22 @@ namespace Sic.App.ViewModels
             DisplayName = displayName;
         }
 
-        private static ImageSource? LoadThumb(string path)
+        private static ImageSource? LoadThumb(IconItem item)
         {
             try
             {
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
-                bmp.UriSource = new Uri(path);
+                if (!string.IsNullOrEmpty(item.ZipPath) && !string.IsNullOrEmpty(item.ZipEntry))
+                {
+                    var bytes = SicAssetZip.ReadEntry(item.ZipPath!, item.ZipEntry!);
+                    if (bytes == null) { bmp.EndInit(); return null; }
+                    bmp.StreamSource = new MemoryStream(bytes);
+                }
+                else
+                {
+                    bmp.UriSource = new Uri(item.Path);
+                }
                 bmp.DecodePixelWidth = 64;
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;

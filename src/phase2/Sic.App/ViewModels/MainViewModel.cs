@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Microsoft.Win32;
 using Sic.App.Localization;
 using Sic.Core;
@@ -15,23 +14,23 @@ namespace Sic.App.ViewModels
 {
     public sealed class MainViewModel : INotifyPropertyChanged
     {
-        private const int MaxItems = 500;
-
-        // タイルの分割投入用。最初の 1 画面分だけ即時、残りは背景優先度で少しずつ。
-        private const int FirstChunk = 48;
-        private const int NextChunk = 32;
-        private int _populateToken;
-        private List<IconItem> _tail = new List<IconItem>();
-        private bool _windowShown;
+        // タイル 1 枚の占有幅（Button Width 98 + Margin 4×2）。列数算出に使う。
+        private const double TileTotalWidth = 106.0;
 
         private readonly List<IconItem> _all;
         private readonly AppSettings _settings;
         private bool _suppressRebuild;
 
+        // 現フィルタの全タイル（列数変更時は同じ VM を組み直すのでデコード済みサムネは保持される）。
+        private List<IconTileVM> _filtered = new List<IconTileVM>();
+        private int _columns = 8; // ビューポート幅が判明するまでの暫定列数
+
         public ObservableCollection<ChipVM> Styles { get; } = new ObservableCollection<ChipVM>();
         public ObservableCollection<ChipVM> Genres { get; } = new ObservableCollection<ChipVM>();
         public ObservableCollection<ChipVM> Colors { get; } = new ObservableCollection<ChipVM>();
-        public ObservableCollection<IconTileVM> Tiles { get; } = new ObservableCollection<IconTileVM>();
+
+        /// <summary>仮想化リストにバインドする行（各行が最大 <c>_columns</c> 枚のタイル）。</summary>
+        public ObservableCollection<TileRow> Rows { get; } = new ObservableCollection<TileRow>();
 
         public UiStrings Strings { get; private set; } = UiStrings.English();
         public bool IsJapanese { get; private set; }
@@ -83,7 +82,7 @@ namespace Sic.App.ViewModels
             ApplyCommand = new RelayCommand(p =>
             {
                 if (p is IconItem it)
-                    RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = it.Path });
+                    RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = SicAssets.ResolveForApply(it) });
             });
             ResetCommand = new RelayCommand(_ =>
                 RequestClose?.Invoke(new PickResult { Kind = PickKind.Reset }));
@@ -215,77 +214,37 @@ namespace Sic.App.ViewModels
                 q = q.Where(i => Loc.SearchHaystack(i, IsJapanese).ToLowerInvariant().Contains(t));
             }
 
-            var list = q.Take(MaxItems).ToList();
-            CountText = string.Format(Strings.CountFormat, list.Count);
-            PopulateTiles(list);
+            // 全件をタイル化（デコードはサムネ初回アクセス時まで遅延、可視行のみ実体化）。
+            _filtered = q.Select(i => new IconTileVM(i, Loc.DisplayName(i, IsJapanese))).ToList();
+            CountText = string.Format(Strings.CountFormat, _filtered.Count);
+            BuildRows();
         }
 
         /// <summary>
-        /// タイルを分割投入する。最初の 1 画面分だけ即時に追加する。残りは:
-        /// ・初回（ウィンドウ未表示）はフィールドに退避し、<see cref="StartDeferredFill"/>
-        ///   （MainWindow の初回描画後に呼ばれる）まで投入を保留 → 初回描画が 48 枚で素早く完了。
-        /// ・以降（フィルタ変更時）は背景優先度で逐次投入。
-        /// フィルタが変わると進行中の投入は <see cref="_populateToken"/> で中断する。
+        /// ビューポート幅から列数を更新する。MainWindow が初回表示/リサイズ時に呼ぶ。
+        /// 列数が変わったときだけ行を組み直す（同じタイル VM を使うのでサムネは再デコードされない）。
         /// </summary>
-        private void PopulateTiles(List<IconItem> list)
+        public void SetViewportWidth(double width)
         {
-            int token = ++_populateToken;
-            Tiles.Clear();
-            _tail = new List<IconItem>();
-
-            int first = Math.Min(FirstChunk, list.Count);
-            for (int i = 0; i < first; i++)
-                Tiles.Add(new IconTileVM(list[i], Loc.DisplayName(list[i], IsJapanese)));
-
-            if (first >= list.Count) return;
-            var tail = list.GetRange(first, list.Count - first);
-
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null)
-            {
-                // ディスパッチャ未取得（テスト等）は同期で全投入。
-                foreach (var it in tail)
-                    Tiles.Add(new IconTileVM(it, Loc.DisplayName(it, IsJapanese)));
-                return;
-            }
-
-            if (!_windowShown)
-            {
-                // ウィンドウ初回描画を 48 枚で素早く終わらせるため、残りは保留。
-                _tail = tail;
-                return;
-            }
-            StreamTail(tail, token, dispatcher);
+            if (width <= 0) return;
+            int cols = Math.Max(1, (int)((width - 12.0) / TileTotalWidth));
+            if (cols == _columns && Rows.Count > 0) return;
+            _columns = cols;
+            BuildRows();
         }
 
-        private void StreamTail(List<IconItem> tail, int token, Dispatcher dispatcher)
+        /// <summary>現フィルタのタイル列を <c>_columns</c> 枚ごとの行へ束ね直す。</summary>
+        private void BuildRows()
         {
-            int i = 0;
-            void AddMore()
+            Rows.Clear();
+            int cols = Math.Max(1, _columns);
+            for (int i = 0; i < _filtered.Count; i += cols)
             {
-                if (token != _populateToken) return; // 新しいフィルタが来たので中断
-                int end = Math.Min(i + NextChunk, tail.Count);
-                for (; i < end; i++)
-                    Tiles.Add(new IconTileVM(tail[i], Loc.DisplayName(tail[i], IsJapanese)));
-                if (i < tail.Count)
-                    dispatcher.BeginInvoke((Action)AddMore, DispatcherPriority.Background);
+                int n = Math.Min(cols, _filtered.Count - i);
+                var slice = new IconTileVM[n];
+                for (int j = 0; j < n; j++) slice[j] = _filtered[i + j];
+                Rows.Add(new TileRow(slice));
             }
-            dispatcher.BeginInvoke((Action)AddMore, DispatcherPriority.Background);
-        }
-
-        /// <summary>
-        /// MainWindow の初回描画完了後に呼ぶ。保留していた残りタイルの背景投入を開始する。
-        /// 以降のフィルタ変更では <see cref="PopulateTiles"/> が即座に逐次投入する。
-        /// </summary>
-        public void StartDeferredFill()
-        {
-            _windowShown = true;
-            var tail = _tail;
-            _tail = new List<IconItem>();
-            if (tail.Count == 0) return;
-            var dispatcher = Application.Current?.Dispatcher;
-            if (dispatcher == null) return;
-            StreamTail(tail, _populateToken, dispatcher);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;

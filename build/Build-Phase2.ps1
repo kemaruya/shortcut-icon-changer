@@ -102,12 +102,22 @@ foreach ($f in $payload) {
     Copy-Item $src (Join-Path $StageDir $f) -Force
 }
 
-# スターター アイコン (900 種 + index + app.ico)
+# スターター アイコン (icons.zip 同梱 + index)
 $stageAssets = Join-Path $StageDir 'assets\starter-icons'
 New-Item -ItemType Directory -Force -Path $stageAssets | Out-Null
 Copy-Item (Join-Path $AssetsDir '*') $stageAssets -Recurse -Force
-$iconCount = (Get-ChildItem $stageAssets -Recurse -File -Include *.png, *.ico).Count
-Write-Host "  staged files  : $((Get-ChildItem $StageDir -Recurse -File).Count) (icons: $iconCount)"
+$zipFile = Join-Path $stageAssets 'icons.zip'
+if (Test-Path $zipFile) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zr = [System.IO.Compression.ZipFile]::OpenRead($zipFile)
+    try { $iconCount = $zr.Entries.Count } finally { $zr.Dispose() }
+    $zipMb = [math]::Round((Get-Item $zipFile).Length / 1MB, 2)
+    Write-Host "  staged files  : $((Get-ChildItem $StageDir -Recurse -File).Count) (icons.zip: $iconCount 件 / $zipMb MB)"
+}
+else {
+    $iconCount = (Get-ChildItem $stageAssets -Recurse -File -Include *.png, *.ico).Count
+    Write-Host "  staged files  : $((Get-ChildItem $StageDir -Recurse -File).Count) (icons: $iconCount)"
+}
 
 # 4) MSI 生成
 Write-Host "`n[4/4] Building MSI with WiX..." -ForegroundColor Yellow
