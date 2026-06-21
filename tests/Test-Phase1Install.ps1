@@ -113,27 +113,42 @@ Write-Host ("BAD_TAG=[" + `$win.Tag + "]"); exit 3
     Write-Host ("  " + ($clickOut -join ' '))
     Assert ($LASTEXITCODE -eq 0) "アイコンのクリックで選択パスが Window.Tag に入る (回帰テスト)"
 
-    # --- 4c) 既定に戻すボタンで番兵が入る + カテゴリ/色調コンボが構築される ---
+    # --- 4c) タグクラウド: チップで絞り込み / クリア / 既定に戻すボタン ---
     $resetProbe = @"
 Import-Module '$installDir\SicCore.psm1' -Force
 . '$installDir\IconPicker.ps1'
 Add-Type -AssemblyName PresentationFramework
 `$win = New-SicIconPickerWindow -LnkPath '$lnk'
-`$cat = `$win.FindName('CategoryCombo')
-`$col = `$win.FindName('ColorCombo')
+`$cat = `$win.FindName('CategoryPanel')
+`$col = `$win.FindName('ColorPanel')
+`$clear = `$win.FindName('ClearTagsButton')
+`$panel = `$win.FindName('IconPanel')
 `$reset = `$win.FindName('ResetButton')
 if (-not `$reset) { Write-Host 'NO_RESET'; exit 2 }
-if (`$cat.Items.Count -lt 2) { Write-Host ('CAT_ITEMS=' + `$cat.Items.Count); exit 4 }
-if (`$col.Items.Count -lt 2) { Write-Host ('COL_ITEMS=' + `$col.Items.Count); exit 5 }
+if (-not `$clear) { Write-Host 'NO_CLEAR'; exit 8 }
+if (`$cat.Children.Count -lt 5) { Write-Host ('CAT=' + `$cat.Children.Count); exit 4 }
+if (`$col.Children.Count -lt 5) { Write-Host ('COL=' + `$col.Children.Count); exit 5 }
+`$unfiltered = `$panel.Children.Count
+# 先頭のスタイル チップを ON にして Click を発火 → 再描画
+`$chip = `$cat.Children[0]
+`$chip.IsChecked = `$true
+`$chip.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+`$filtered = `$panel.Children.Count
+if (-not (`$filtered -gt 0 -and `$filtered -lt `$unfiltered)) { Write-Host ("FILTER unf=`$unfiltered fil=`$filtered"); exit 6 }
+# タグをクリア → 元の件数に戻る
+`$clear.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+`$cleared = `$panel.Children.Count
+if (`$cleared -ne `$unfiltered) { Write-Host ("CLEAR unf=`$unfiltered cl=`$cleared"); exit 7 }
+# 既定に戻すボタン → 番兵
 `$reset.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
-if (`$win.Tag -eq '__SIC_RESET__') { Write-Host ('CAT=' + `$cat.Items.Count + ' COL=' + `$col.Items.Count); exit 0 }
+if (`$win.Tag -eq '__SIC_RESET__') { Write-Host ("CAT=`$(`$cat.Children.Count) COL=`$(`$col.Children.Count) UNF=`$unfiltered FIL=`$filtered"); exit 0 }
 Write-Host ('BAD_TAG=[' + `$win.Tag + ']'); exit 3
 "@
     $resetFile = Join-Path $work 'resetprobe.ps1'
     Set-Content -LiteralPath $resetFile -Value $resetProbe -Encoding UTF8
     $resetOut = & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $resetFile 2>&1
     Write-Host ("  " + ($resetOut -join ' '))
-    Assert ($LASTEXITCODE -eq 0) "「既定に戻す」ボタンで番兵が Window.Tag に入る / コンボボックスが構築される"
+    Assert ($LASTEXITCODE -eq 0) "タグクラウドで絞り込み/クリアが動作し、既定に戻すで番兵が Window.Tag に入る"
 
     # --- 5) ランチャー -Reset で既定に戻す --------------------------------
     & $psExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir 'Launch-IconPicker.ps1') -LnkPath $lnk -Reset
