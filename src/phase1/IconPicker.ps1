@@ -36,22 +36,64 @@ function New-SicIconPickerWindow {
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="アイコンを変更" Height="560" Width="820"
+        Title="アイコンを変更" Height="640" Width="860"
         WindowStartupLocation="CenterScreen" Background="#FAFAFA">
+  <Window.Resources>
+    <Style TargetType="ToggleButton">
+      <Setter Property="Margin" Value="3"/>
+      <Setter Property="Padding" Value="9,3"/>
+      <Setter Property="Foreground" Value="#333"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="chip" CornerRadius="11" Background="White"
+                    BorderBrush="#CFCFCF" BorderThickness="1"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="chip" Property="Background" Value="#EAF3FB"/>
+                <Setter TargetName="chip" Property="BorderBrush" Value="#9CC3E6"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="chip" Property="Background" Value="#0F6CBD"/>
+                <Setter TargetName="chip" Property="BorderBrush" Value="#0F6CBD"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
   <DockPanel Margin="10">
     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
       <TextBlock x:Name="HeaderText" FontSize="13" Foreground="#333" Margin="2,0,0,6"/>
-      <DockPanel>
-        <ComboBox x:Name="CategoryCombo" DockPanel.Dock="Right" Width="160" Height="28"
-                  Margin="6,0,0,0" VerticalContentAlignment="Center"
-                  ToolTip="カテゴリで絞り込み"/>
-        <ComboBox x:Name="ColorCombo" DockPanel.Dock="Right" Width="120" Height="28"
-                  Margin="6,0,0,0" VerticalContentAlignment="Center"
-                  ToolTip="色調で絞り込み"/>
+      <DockPanel Margin="0,0,0,6">
+        <Button x:Name="ClearTagsButton" DockPanel.Dock="Right" Content="タグをクリア"
+                Width="100" Height="28" Margin="6,0,0,0"
+                ToolTip="選択中のタグをすべて解除します"/>
         <TextBox x:Name="SearchBox" Height="28" VerticalContentAlignment="Center"
                  FontSize="13" Padding="6,0,0,0"
                  ToolTip="名前・キーワードで絞り込み（例: rocket, folder, star）"/>
       </DockPanel>
+      <Border Background="#F2F5F8" BorderBrush="#E2E2E2" BorderThickness="1" CornerRadius="6" Padding="8,6">
+        <StackPanel>
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Left" Text="スタイル" FontSize="11" Foreground="#888"
+                       VerticalAlignment="Center" Width="46" Margin="0,0,4,0"/>
+            <WrapPanel x:Name="CategoryPanel"/>
+          </DockPanel>
+          <DockPanel Margin="0,6,0,0">
+            <TextBlock DockPanel.Dock="Left" Text="色調" FontSize="11" Foreground="#888"
+                       VerticalAlignment="Center" Width="46" Margin="0,0,4,0"/>
+            <WrapPanel x:Name="ColorPanel"/>
+          </DockPanel>
+        </StackPanel>
+      </Border>
     </StackPanel>
     <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0" LastChildFill="False">
       <Button x:Name="ResetButton" DockPanel.Dock="Left" Content="既定に戻す" Width="120" Height="32"
@@ -73,8 +115,9 @@ function New-SicIconPickerWindow {
 
     $headerText    = $window.FindName('HeaderText')
     $searchBox     = $window.FindName('SearchBox')
-    $categoryCombo = $window.FindName('CategoryCombo')
-    $colorCombo    = $window.FindName('ColorCombo')
+    $categoryPanel = $window.FindName('CategoryPanel')
+    $colorPanel    = $window.FindName('ColorPanel')
+    $clearBtn      = $window.FindName('ClearTagsButton')
     $iconPanel     = $window.FindName('IconPanel')
     $statusText    = $window.FindName('StatusText')
     $customBtn     = $window.FindName('CustomButton')
@@ -88,27 +131,89 @@ function New-SicIconPickerWindow {
     $library = @(Get-IconLibrary)
     $maxItems = 500
 
-    # --- カテゴリ / 色調 コンボボックスを母集団から構築 ---
-    $allCatLabel = 'すべて（カテゴリ）'
-    $allColLabel = 'すべて（色）'
-    [void]$categoryCombo.Items.Add($allCatLabel)
-    foreach ($c in @($library | ForEach-Object { $_.CategoryJa } | Where-Object { $_ } | Sort-Object -Unique)) {
-        [void]$categoryCombo.Items.Add($c)
+    # --- タグクラウド（スタイル=カテゴリ / 色調）を母集団から構築 ---
+    # 各タグは ToggleButton（チップ）。Tag に正規化タグ値を保持し、
+    # 件数が多いタグほどフォントを大きく描く（タグクラウド風）。
+    $toneHex = @{
+        '赤' = '#E53935'; '橙' = '#FB8C00'; '黄' = '#F9A825'; '緑' = '#43A047'; '青' = '#1E88E5';
+        '紫' = '#8E24AA'; '桃' = '#EC407A'; '茶' = '#6D4C41'; '白' = '#BDBDBD'; '灰' = '#9E9E9E'; '黒' = '#424242'
     }
-    $categoryCombo.SelectedIndex = 0
+    $brushConv = New-Object System.Windows.Media.BrushConverter
 
-    $toneOrder = @(Get-SicToneOrder)
-    $colorsPresent = @($library | ForEach-Object { $_.Colors } | Where-Object { $_ } | Sort-Object -Unique)
-    [void]$colorCombo.Items.Add($allColLabel)
-    foreach ($c in @($toneOrder | Where-Object { $colorsPresent -contains $_ })) {
-        [void]$colorCombo.Items.Add($c)
+    # 件数を 11〜17pt に線形スケールする
+    $scaleFont = {
+        param($count, $min, $max)
+        if ($max -le $min) { return 13.0 }
+        $t = ($count - $min) / [double]($max - $min)
+        return [Math]::Round(11.0 + $t * 6.0, 1)
     }
-    $colorCombo.SelectedIndex = 0
+
+    # スタイル（カテゴリ）チップ — 件数の多い順
+    $catGroups = @($library | Where-Object { $_.CategoryJa } | Group-Object CategoryJa | Sort-Object Count -Descending)
+    if ($catGroups.Count -gt 0) {
+        $catMax = ($catGroups | Measure-Object Count -Maximum).Maximum
+        $catMin = ($catGroups | Measure-Object Count -Minimum).Minimum
+        foreach ($g in $catGroups) {
+            $chip = New-Object System.Windows.Controls.Primitives.ToggleButton
+            $chip.Content = "{0} ({1})" -f $g.Name, $g.Count
+            $chip.Tag = [string]$g.Name
+            $chip.FontSize = & $scaleFont $g.Count $catMin $catMax
+            $chip.ToolTip = "スタイル: $($g.Name)"
+            [void]$categoryPanel.Children.Add($chip)
+        }
+    }
+
+    # 色調チップ — 色相順。小さな色見本（丸）を添える
+    $toneOrder = @(Get-SicToneOrder)
+    $colGroups = @($library | ForEach-Object { $_.Colors } | Where-Object { $_ } | Group-Object |
+        Sort-Object @{ Expression = { [array]::IndexOf($toneOrder, $_.Name) } })
+    if ($colGroups.Count -gt 0) {
+        $colMax = ($colGroups | Measure-Object Count -Maximum).Maximum
+        $colMin = ($colGroups | Measure-Object Count -Minimum).Minimum
+        foreach ($g in $colGroups) {
+            $chip = New-Object System.Windows.Controls.Primitives.ToggleButton
+            $chip.Tag = [string]$g.Name
+            $chip.FontSize = & $scaleFont $g.Count $colMin $colMax
+            $chip.ToolTip = "色調: $($g.Name)"
+
+            $row = New-Object System.Windows.Controls.StackPanel
+            $row.Orientation = 'Horizontal'
+            $dot = New-Object System.Windows.Shapes.Ellipse
+            $dot.Width = 11; $dot.Height = 11; $dot.Margin = '0,0,5,0'
+            $dot.Stroke = $brushConv.ConvertFromString('#55000000')
+            $dot.StrokeThickness = 0.5
+            if ($g.Name -eq '多色') {
+                $grad = New-Object System.Windows.Media.LinearGradientBrush
+                $grad.StartPoint = New-Object System.Windows.Point(0, 0)
+                $grad.EndPoint = New-Object System.Windows.Point(1, 1)
+                $grad.GradientStops.Add((New-Object System.Windows.Media.GradientStop ([System.Windows.Media.Color]::FromRgb(0xE5, 0x39, 0x35), 0.0)))
+                $grad.GradientStops.Add((New-Object System.Windows.Media.GradientStop ([System.Windows.Media.Color]::FromRgb(0x43, 0xA0, 0x47), 0.5)))
+                $grad.GradientStops.Add((New-Object System.Windows.Media.GradientStop ([System.Windows.Media.Color]::FromRgb(0x1E, 0x88, 0xE5), 1.0)))
+                $dot.Fill = $grad
+            }
+            elseif ($toneHex.ContainsKey($g.Name)) {
+                $dot.Fill = $brushConv.ConvertFromString($toneHex[$g.Name])
+            }
+            else {
+                $dot.Fill = $brushConv.ConvertFromString('#9E9E9E')
+            }
+            $txt = New-Object System.Windows.Controls.TextBlock
+            $txt.Text = "{0} ({1})" -f $g.Name, $g.Count
+            $txt.VerticalAlignment = 'Center'
+            [void]$row.Children.Add($dot)
+            [void]$row.Children.Add($txt)
+            $chip.Content = $row
+            [void]$colorPanel.Children.Add($chip)
+        }
+    }
 
     $buildItems = {
         $nameFilter = $searchBox.Text.Trim()
-        $catSel = if ($categoryCombo.SelectedIndex -gt 0) { [string]$categoryCombo.SelectedItem } else { $null }
-        $colSel = if ($colorCombo.SelectedIndex -gt 0) { [string]$colorCombo.SelectedItem } else { $null }
+        # ON になっているチップ（タグ）を facet ごとに集める
+        $enabledCats = @()
+        foreach ($c in $categoryPanel.Children) { if ($c.IsChecked) { $enabledCats += [string]$c.Tag } }
+        $enabledCols = @()
+        foreach ($c in $colorPanel.Children) { if ($c.IsChecked) { $enabledCols += [string]$c.Tag } }
 
         $iconPanel.Children.Clear()
         $items = $library
@@ -119,8 +224,13 @@ function New-SicIconPickerWindow {
                 ($_.Keywords -and ((@($_.Keywords) -join ' ') -like "*$nameFilter*"))
             }
         }
-        if ($catSel) { $items = $items | Where-Object { $_.CategoryJa -eq $catSel } }
-        if ($colSel) { $items = $items | Where-Object { @($_.Colors) -contains $colSel } }
+        # facet 内は OR、facet をまたぐと AND
+        if ($enabledCats.Count -gt 0) {
+            $items = $items | Where-Object { $enabledCats -contains $_.CategoryJa }
+        }
+        if ($enabledCols.Count -gt 0) {
+            $items = $items | Where-Object { @($_.Colors | Where-Object { $enabledCols -contains $_ }).Count -gt 0 }
+        }
         $items = @($items)
         $shown = $items
         if ($shown.Count -gt $maxItems) { $shown = $shown[0..($maxItems - 1)] }
@@ -190,8 +300,19 @@ function New-SicIconPickerWindow {
     }.GetNewClosure()
 
     $searchBox.Add_TextChanged({ & $buildItems }.GetNewClosure())
-    $categoryCombo.Add_SelectionChanged({ & $buildItems }.GetNewClosure())
-    $colorCombo.Add_SelectionChanged({ & $buildItems }.GetNewClosure())
+
+    # 各タグ チップの Click で再描画。ハンドラは関数スコープで生成し $buildItems を捕捉する。
+    $rebuild = { & $buildItems }.GetNewClosure()
+    foreach ($c in $categoryPanel.Children) { $c.Add_Click($rebuild) }
+    foreach ($c in $colorPanel.Children) { $c.Add_Click($rebuild) }
+
+    # タグをクリア: 全チップを解除して再描画
+    $clearBtn.Add_Click({
+        param($s, $e)
+        foreach ($c in $categoryPanel.Children) { $c.IsChecked = $false }
+        foreach ($c in $colorPanel.Children) { $c.IsChecked = $false }
+        & $buildItems
+    }.GetNewClosure())
 
     $customBtn.Add_Click({
         param($s, $e)
