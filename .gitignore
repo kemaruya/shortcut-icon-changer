@@ -13,6 +13,10 @@ publish/
 *.cer
 AppPackages/
 
+# WiX / MSI build artifacts (attach MSI to a Release instead of committing)
+*.msi
+*.wixpdb
+
 # Local icon cache / downloaded full emoji set
 .cache/
 assets/fluent-emoji-full/

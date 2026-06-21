@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shortcut Icon Changer - 個人ユーザー (perUser) MSI。
+  追加ランタイム不要 (.NET Framework 4.8 は Windows 11 in-box)。
+  Windows Installer (msiexec) のみで動作し、UAC 昇格なしで %LOCALAPPDATA% に導入する。
+  ビルド時の preprocessor 変数:
+    StageDir       … 配置するファイル一式 (exe / Sic.Core.dll / assets) のステージ ディレクトリ
+    ProductVersion … 製品バージョン (例: 0.5.0.0)
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Shortcut Icon Changer"
+           Manufacturer="kemaruya"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="{2335C038-7A6E-4537-BE89-FB586BFCB495}"
+           Scope="perUser"
+           Compressed="yes">
+
+    <SummaryInformation Description="Shortcut Icon Changer"
+                        Manufacturer="kemaruya" />
+
+    <MajorUpgrade DowngradeErrorMessage="より新しいバージョンが既にインストールされています。 / A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- %LOCALAPPDATA%\Programs\ShortcutIconChanger -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="ShortcutIconChanger" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Shortcut Icon Changer" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="ContextMenuVerb" />
+    </Feature>
+
+    <!-- exe / Sic.Core.dll / assets\starter-icons\** をステージから自動ハーベスト -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.StageDir)\**" />
+    </ComponentGroup>
+
+    <!-- .lnk の右クリック動詞 (レガシー「その他のオプション」側に表示)。
+         ラベル既定は日本語。アプリ起動時に表示言語へ追従して上書きする。 -->
+    <Component Id="ContextMenuVerb" Directory="INSTALLFOLDER"
+               Guid="{55D198A0-9D50-4AE5-B80E-B78ABFCCBEAB}">
+      <RegistryKey Root="HKCU" Key="Software\Classes\lnkfile\shell\sic.changeicon">
+        <RegistryValue Type="string" Value="アイコンを変更(&amp;I)" KeyPath="yes" />
+        <RegistryValue Name="Icon" Type="string"
+                       Value="[INSTALLFOLDER]ShortcutIconChanger.exe,0" />
+      </RegistryKey>
+      <RegistryKey Root="HKCU" Key="Software\Classes\lnkfile\shell\sic.changeicon\command">
+        <RegistryValue Type="string"
+                       Value="&quot;[INSTALLFOLDER]ShortcutIconChanger.exe&quot; &quot;%1&quot;" />
+      </RegistryKey>
+    </Component>
+
+  </Package>
+</Wix>
