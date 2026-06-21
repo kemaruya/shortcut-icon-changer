@@ -112,6 +112,37 @@ Write-Host ("BAD_TAG=[" + `$win.Tag + "]"); exit 3
     $clickOut = & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $clickFile 2>&1
     Write-Host ("  " + ($clickOut -join ' '))
     Assert ($LASTEXITCODE -eq 0) "アイコンのクリックで選択パスが Window.Tag に入る (回帰テスト)"
+
+    # --- 4c) 既定に戻すボタンで番兵が入る + カテゴリ/色調コンボが構築される ---
+    $resetProbe = @"
+Import-Module '$installDir\SicCore.psm1' -Force
+. '$installDir\IconPicker.ps1'
+Add-Type -AssemblyName PresentationFramework
+`$win = New-SicIconPickerWindow -LnkPath '$lnk'
+`$cat = `$win.FindName('CategoryCombo')
+`$col = `$win.FindName('ColorCombo')
+`$reset = `$win.FindName('ResetButton')
+if (-not `$reset) { Write-Host 'NO_RESET'; exit 2 }
+if (`$cat.Items.Count -lt 2) { Write-Host ('CAT_ITEMS=' + `$cat.Items.Count); exit 4 }
+if (`$col.Items.Count -lt 2) { Write-Host ('COL_ITEMS=' + `$col.Items.Count); exit 5 }
+`$reset.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+if (`$win.Tag -eq '__SIC_RESET__') { Write-Host ('CAT=' + `$cat.Items.Count + ' COL=' + `$col.Items.Count); exit 0 }
+Write-Host ('BAD_TAG=[' + `$win.Tag + ']'); exit 3
+"@
+    $resetFile = Join-Path $work 'resetprobe.ps1'
+    Set-Content -LiteralPath $resetFile -Value $resetProbe -Encoding UTF8
+    $resetOut = & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $resetFile 2>&1
+    Write-Host ("  " + ($resetOut -join ' '))
+    Assert ($LASTEXITCODE -eq 0) "「既定に戻す」ボタンで番兵が Window.Tag に入る / コンボボックスが構築される"
+
+    # --- 5) ランチャー -Reset で既定に戻す --------------------------------
+    & $psExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir 'Launch-IconPicker.ps1') -LnkPath $lnk -Reset
+    Assert ($LASTEXITCODE -eq 0) "Launch-IconPicker.ps1 -Reset が正常終了した"
+    $sh4 = New-Object -ComObject WScript.Shell
+    $sc4 = $sh4.CreateShortcut($lnk); $iconLocReset = $sc4.IconLocation
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($sh4)
+    Write-Host "  IconLocation(after reset) = $iconLocReset"
+    Assert ($iconLocReset -eq ',0') "ランチャー -Reset で IconLocation が ',0'（既定）になる"
 }
 finally {
     # --- 後始末（アンインストール） ---------------------------------------

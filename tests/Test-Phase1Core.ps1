@@ -116,6 +116,37 @@ try {
     $lib = Get-IconLibrary
     Write-Host ("  ライブラリ件数 = {0}" -f (@($lib).Count))
     Assert ($true) "Get-IconLibrary が例外なく動作する"
+
+    # --- 6b) タグ（カテゴリ/色調/キーワード）が付与される -----------------
+    $lib = @(Get-IconLibrary)
+    $first = $lib | Select-Object -First 1
+    Assert ($null -ne $first.PSObject.Properties['Category']) "ライブラリ項目に Category プロパティがある"
+    Assert ($null -ne $first.PSObject.Properties['Colors']) "ライブラリ項目に Colors プロパティがある"
+    $withCat = @($lib | Where-Object { $_.CategoryJa })
+    $withCol = @($lib | Where-Object { @($_.Colors).Count -gt 0 })
+    Write-Host ("  カテゴリ付き = {0} / 色調付き = {1}" -f $withCat.Count, $withCol.Count)
+    Assert ($withCat.Count -gt 0) "カテゴリ タグが付与された項目がある（icons-index.json）"
+    Assert ($withCol.Count -gt 0) "色調タグが付与された項目がある"
+
+    # --- 7) Get-SicDominantColors -----------------------------------------
+    $tones = @(Get-SicDominantColors -Path $pngPath)
+    Write-Host ("  色調（テスト PNG）= {0}" -f ($tones -join ', '))
+    Assert ($tones.Count -gt 0) "色調分析が 1 つ以上のタグを返す"
+    $known = @('赤', '橙', '黄', '緑', '青', '紫', '桃', '茶', '白', '灰', '黒', '多色')
+    Assert (@($tones | Where-Object { $known -notcontains $_ }).Count -eq 0) "色調タグはすべて既知の色名"
+    # OrangeRed -> DodgerBlue のグラデーション円なので 橙/赤 系か 青 系を含むはず
+    Assert ((@($tones) -contains '青') -or (@($tones) -contains '橙') -or (@($tones) -contains '赤')) "想定色（青/橙/赤）のいずれかを検出する"
+
+    # --- 8) Reset-ShortcutIcon --------------------------------------------
+    # 直前のテストで $lnkPath にはアイコンが適用済み。既定に戻す。
+    $resetResult = Reset-ShortcutIcon -LnkPath $lnkPath
+    Assert ($resetResult.IconPath -eq '') "Reset-ShortcutIcon の戻り値 IconPath が空"
+    $sh3 = New-Object -ComObject WScript.Shell
+    $sc3 = $sh3.CreateShortcut($lnkPath)
+    $iconLoc2 = $sc3.IconLocation
+    [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($sh3)
+    Write-Host "  reset IconLocation = $iconLoc2"
+    Assert ($iconLoc2 -eq ',0') "既定に戻すと IconLocation が ',0'（空パス・索引0）になる"
 }
 finally {
     Remove-Item -Recurse -Force -LiteralPath $work -ErrorAction SilentlyContinue
