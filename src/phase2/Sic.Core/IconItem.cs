@@ -10,6 +10,12 @@ namespace Sic.Core
 
         public string Path { get; set; } = "";
 
+        /// <summary>zip 同梱アイコンの場合の zip 物理パス（loose ファイルなら null）。</summary>
+        public string? ZipPath { get; set; }
+
+        /// <summary>zip 同梱アイコンの場合の zip エントリ名（例 "Rocket (フラット).png"）。</summary>
+        public string? ZipEntry { get; set; }
+
         /// <summary>"starter" もしくは "library"。</summary>
         public string Source { get; set; } = "";
 

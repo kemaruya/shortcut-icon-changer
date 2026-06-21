@@ -74,8 +74,9 @@ namespace Sic.App
             var vm = new MainViewModel(settings, hasLnk: lnk != null);
             var win = new MainWindow(vm);
 
-            // 初回描画後: スプラッシュを閉じ、残りのタイルの背景投入を開始する。
-            win.ContentRendered += (_, __) => { CloseSplash(); vm.StartDeferredFill(); };
+            // 初回描画後: スプラッシュを閉じる。タイルは行単位の仮想化により可視分だけ
+            // 実体化されるため、以前のような全タイルの遅延投入は不要。
+            win.ContentRendered += (_, __) => CloseSplash();
 
             try { win.ShowDialog(); }
             finally { CloseSplash(); }

@@ -12,17 +12,25 @@
     メニュー用 assets/app.ico も生成する。
     開発者がスターターセットを更新するためのツール（エンドユーザーは実行不要）。
 .PARAMETER Styles
-    取り込むスタイル。既定は 3D / Flat / High Contrast。3D は PNG をそのまま、
-    Flat / High Contrast は SVG をビルド時に PNG へラスタライズして同梱する。
+    取り込むスタイル。既定は 3D / Flat（ハイコントラストは使用率が低いため既定では同梱しない。
+    必要なら明示指定で取り込める）。3D は PNG をそのまま、Flat / High Contrast は SVG を
+    ビルド時に PNG へラスタライズして同梱する。
+.PARAMETER Names
+    取り込むアイコン名（Fluent UI Emoji のフォルダ名）。既定は空＝ツリー上の全アイコンを同梱する。
 .PARAMETER Clean
-    既存の starter-icons を全消去して再生成する（既定は不足分のみ追加＝冪等）。
+    既存の作業フォルダ PNG を全消去して再生成する（既定は不足分のみ追加＝冪等）。
 .PARAMETER CacheDir
-    SVG ラスタライズ用の作業フォルダ（resvg の node_modules と一時 SVG を置く）。
+    ダウンロード/ラスタライズ用の作業フォルダ（PNG キャッシュ・resvg の node_modules・一時 SVG）。
+.NOTES
+    同梱物は loose PNG ではなく単一の assets/starter-icons/icons.zip に packing する
+    （導入時のファイル数・AV スキャン・MSI ハーベストを軽量化）。アプリ (Sic.Core) は
+    icons.zip があればそこから、無ければ loose PNG から列挙する。
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('3D', 'Flat', 'High Contrast')]
-    [string[]] $Styles = @('3D', 'Flat', 'High Contrast'),
+    [string[]] $Styles = @('3D', 'Flat'),
+    [string[]] $Names = @(),
     [switch] $Clean,
     [string] $CacheDir = (Join-Path $env:LOCALAPPDATA 'sic-build')
 )
@@ -33,7 +41,9 @@ $ErrorActionPreference = 'Stop'
 $repo = Resolve-Path (Join-Path $PSScriptRoot '..')
 $starterDir = Join-Path $repo 'assets\starter-icons'
 $assetsDir = Join-Path $repo 'assets'
+$workDir = Join-Path $CacheDir 'starter-png'   # ダウンロード/ラスタライズ済み PNG の永続キャッシュ（リポジトリ外）
 New-Item -ItemType Directory -Force -Path $starterDir | Out-Null
+New-Item -ItemType Directory -Force -Path $workDir | Out-Null
 
 Import-Module (Join-Path $repo 'src\phase1\SicCore.psm1') -Force
 
@@ -85,77 +95,11 @@ function Initialize-Resvg {
     return $nodeModules
 }
 
-# ショートカット用途に有用な絵文字（名前は Fluent UI Emoji の asset フォルダ名）。
-# カテゴリ（顔/動物/食べ物/旅行/物/記号/アクティビティ等）と色調が満遍なく入るよう選定。
-$wanted = @(
-    # --- 物 / ツール / テック / オフィス ---
-    'Rocket', 'Light bulb', 'Gear', 'Laptop', 'Desktop computer', 'Keyboard',
-    'Computer mouse', 'Printer', 'Floppy disk', 'Optical disk', 'DVD', 'Camera',
-    'Video camera', 'Movie camera', 'Television', 'Telephone', 'Mobile phone',
-    'Battery', 'Electric plug', 'Flashlight', 'Candle', 'Magnifying glass tilted left',
-    'Microscope', 'Telescope', 'Satellite antenna', 'Hammer', 'Wrench',
-    'Hammer and wrench', 'Nut and bolt', 'Screwdriver', 'Toolbox', 'Gear',
-    'Magnet', 'Test tube', 'Petri dish', 'Pill', 'Syringe', 'Thermometer',
-    'Broom', 'Shopping cart', 'Money bag', 'Credit card', 'Coin', 'Dollar banknote',
-    'Briefcase', 'File folder', 'Open file folder', 'Card index dividers',
-    'Card file box', 'Clipboard', 'Pushpin', 'Round pushpin', 'Paperclip',
-    'Linked paperclips', 'Triangular ruler', 'Straight ruler', 'Scissors', 'Pen',
-    'Fountain pen', 'Pencil', 'Crayon', 'Paintbrush', 'Memo', 'Book', 'Books',
-    'Blue book', 'Green book', 'Orange book', 'Notebook', 'Ledger', 'Closed book',
-    'Open book', 'Newspaper', 'Bookmark', 'Label', 'Calendar', 'Spiral calendar',
-    'Spiral notebook', 'Bar chart', 'Chart increasing', 'Chart decreasing',
-    'Locked', 'Unlocked', 'Key', 'Old key', 'Locked with key', 'Shield', 'Bell',
-    'Megaphone', 'Loudspeaker', 'Musical note', 'Musical notes', 'Headphone',
-    'Studio microphone', 'Trophy', 'Crown', 'Gem stone', 'Ring', 'Artist palette',
-    'Framed picture', 'Joystick', 'Game die', 'Puzzle piece', 'Teddy bear',
-    'Balloon', 'Party popper', 'Wrapped gift', 'Package', 'Postbox', 'Envelope',
-    'Inbox tray', 'Outbox tray', 'Scroll', 'Page facing up', 'Receipt', 'Hourglass done',
-    'Alarm clock', 'Stopwatch',
-    # --- 記号 / ハート ---
-    'Red heart', 'Orange heart', 'Yellow heart', 'Green heart', 'Blue heart',
-    'Purple heart', 'Brown heart', 'Black heart', 'White heart', 'Sparkling heart',
-    'Star', 'Glowing star', 'Sparkles', 'Fire', 'High voltage', 'Collision',
-    'Check mark button', 'Cross mark', 'Warning', 'Recycling symbol', 'Heart on fire',
-    # --- 動物 / 自然 ---
-    'Dog face', 'Cat face', 'Fox', 'Lion', 'Tiger face', 'Unicorn', 'Panda',
-    'Koala', 'Penguin', 'Bird', 'Owl', 'Butterfly', 'Honeybee', 'Lady beetle',
-    'Snail', 'Turtle', 'Tropical fish', 'Dolphin', 'Whale', 'Octopus', 'Paw prints',
-    'Four leaf clover', 'Herb', 'Cactus', 'Palm tree', 'Evergreen tree', 'Seedling',
-    'Maple leaf', 'Fallen leaf', 'Sunflower', 'Rose', 'Tulip', 'Blossom', 'Hibiscus',
-    'Cherry blossom', 'Mushroom', 'Sun', 'Sun behind cloud', 'Cloud', 'Rainbow',
-    'Snowflake', 'Droplet', 'Water wave', 'Crescent moon',
-    # --- 食べ物 / 飲み物 ---
-    'Red apple', 'Green apple', 'Watermelon', 'Grapes', 'Strawberry', 'Cherries',
-    'Peach', 'Banana', 'Pineapple', 'Lemon', 'Avocado', 'Tomato', 'Carrot',
-    'Ear of corn', 'Hot pepper', 'Broccoli', 'Bread', 'Croissant', 'Cheese wedge',
-    'Hamburger', 'French fries', 'Pizza', 'Hot dog', 'Taco', 'Sushi', 'Bento box',
-    'Rice ball', 'Cooked rice', 'Spaghetti', 'Cookie', 'Doughnut', 'Cupcake',
-    'Birthday cake', 'Chocolate bar', 'Candy', 'Lollipop', 'Ice cream',
-    'Hot beverage', 'Beer mug', 'Wine glass', 'Cocktail glass', 'Tropical drink',
-    # --- 旅行 / 場所 / 乗り物 ---
-    'Airplane', 'Small airplane', 'Flying saucer', 'Helicopter', 'Automobile',
-    'Taxi', 'Bus', 'Police car', 'Fire engine', 'Ambulance', 'Bicycle', 'Motorcycle',
-    'Locomotive', 'Bullet train', 'Ship', 'Sailboat', 'Anchor', 'Fuel pump',
-    'World map', 'Compass', 'Mountain', 'Snow-capped mountain', 'Volcano', 'Camping',
-    'Beach with umbrella', 'Desert island', 'Castle', 'House', 'Houses',
-    'Office building', 'School', 'Hospital', 'Bank', 'Hotel', 'Factory', 'Tent',
-    'Sunrise', 'Cityscape', 'Fountain', 'Ferris wheel', 'Roller coaster',
-    # --- アクティビティ / スポーツ / 音楽 ---
-    'Soccer ball', 'Basketball', 'American football', 'Baseball', 'Tennis',
-    'Volleyball', 'Bowling', 'Direct hit', 'Video game', 'Kite', 'Ticket',
-    'Performing arts', 'Drum', 'Guitar', 'Trumpet', 'Saxophone', 'Violin',
-    'Musical keyboard',
-    # --- 顔 / 感情 / キャラ ---
-    'Grinning face', 'Smiling face with heart-eyes', 'Star-struck',
-    'Face with tears of joy', 'Smiling face with sunglasses', 'Thinking face',
-    'Partying face', 'Robot', 'Alien', 'Ghost', 'Jack-o-lantern', 'Skull',
-    'Clown face', 'Pile of poo',
-    # --- 人 / 体 / ジェスチャー ---
-    'Waving hand', 'Thumbs up', 'Thumbs down', 'OK hand', 'Victory hand',
-    'Folded hands', 'Clapping hands', 'Flexed biceps', 'Eyes', 'Brain',
-    # --- 旗 ---
-    'Chequered flag', 'Triangular flag', 'Pirate flag', 'Crossed flags'
-)
+# 取り込むアイコン名。既定（-Names 未指定）はツリー上の全アイコンを対象とする
+# （実際の名前一覧は下の $styleMaps 構築後に算出する）。
+$uniqueWantedNames = New-Object System.Collections.Generic.List[string]
+foreach ($n in @($Names | Select-Object -Unique)) { [void]$uniqueWantedNames.Add($n) }
+$wanted = @($Names)
 
 Write-Host "Fluent UI Emoji のファイル一覧を取得中..."
 $tree = Invoke-RestMethod -Uri 'https://api.github.com/repos/microsoft/fluentui-emoji/git/trees/main?recursive=1' -Headers $ua -TimeoutSec 60
@@ -175,8 +119,20 @@ foreach ($st in $selectedStyles) {
     Write-Host ("  {0}: {1} 件" -f $st, $m.Count)
 }
 
+# -Names 未指定なら、選択スタイルのツリー上に存在する全アイコン名を対象にする（＝全件同梱）。
+if ($uniqueWantedNames.Count -eq 0 -and @($wanted).Count -eq 0) {
+    $seenName = @{}
+    foreach ($st in $selectedStyles) {
+        foreach ($v in $styleMaps[$st].Values) {
+            $lk2 = $v.Name.ToLowerInvariant()
+            if (-not $seenName.ContainsKey($lk2)) { $seenName[$lk2] = $true; [void]$uniqueWantedNames.Add($v.Name) }
+        }
+    }
+    Write-Host ("  対象アイコン（全件）: {0} 件" -f $uniqueWantedNames.Count)
+}
+
 if ($Clean) {
-    Get-ChildItem -LiteralPath $starterDir -Filter *.png -File -ErrorAction SilentlyContinue | Remove-Item -Force
+    Get-ChildItem -LiteralPath $workDir -Filter *.png -File -ErrorAction SilentlyContinue | Remove-Item -Force
 }
 
 # SVG ラスタライズの準備（Flat / High Contrast がある場合のみ）
@@ -197,7 +153,7 @@ $metaCache = @{}
 $rasterQueue = New-Object System.Collections.Generic.List[object]
 $pending = New-Object System.Collections.Generic.List[object]
 $dlPng = 0; $skipPng = 0; $dlSvg = 0; $miss = 0
-$uniqueWanted = @($wanted | Select-Object -Unique)
+$uniqueWanted = @($uniqueWantedNames)
 
 $i = 0
 foreach ($want in $uniqueWanted) {
@@ -207,14 +163,14 @@ foreach ($want in $uniqueWanted) {
         $spec = $styleSpec[$st]
         $map = $styleMaps[$st]
         if (-not $map.ContainsKey($lk)) {
-            if ($st -eq '3D') { Write-Warning "見つかりません(3D): $want"; $miss++ }
+            if ($st -eq '3D') { $miss++ }
             continue
         }
         $entry = $map[$lk]
         $realName = $entry.Name
         $safeName = ($realName -replace '[\\/:*?"<>|]', '_')
         $destBase = $safeName + $spec.DestSuffix
-        $dest = Join-Path $starterDir ("{0}.png" -f $destBase)
+        $dest = Join-Path $workDir ("{0}.png" -f $destBase)
 
         if ($spec.Ext -eq 'png') {
             if (-not (Test-Path -LiteralPath $dest)) {
@@ -292,7 +248,7 @@ Write-Host ("索引: {0} 件 -> {1}" -f $icons.Count, $indexPath) -ForegroundCol
 $seedCandidates = @('Sparkles', 'Star') + @($icons.Keys)
 $iconSeed = $null
 foreach ($cand in $seedCandidates) {
-    $p = Join-Path $starterDir ("{0}.png" -f $cand)
+    $p = Join-Path $workDir ("{0}.png" -f $cand)
     if (Test-Path $p) { $iconSeed = $p; break }
 }
 if ($iconSeed) {
@@ -303,6 +259,32 @@ if ($iconSeed) {
 else {
     Write-Warning "app.ico の元画像が見つからないため生成をスキップしました。"
 }
+
+# --- 全 PNG を単一 zip に packing（同梱物のファイル数を 1 に＝導入/AV スキャン/MSI ハーベストを軽量化）---
+# PNG は既に圧縮済みのため CompressionLevel は NoCompression（zip 化の目的は連結・ファイル数削減）。
+# ZipArchiveMode/CompressionLevel は System.IO.Compression（コア）側にあるため両アセンブリを読み込む。
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zipPath = Join-Path $starterDir 'icons.zip'
+if (Test-Path -LiteralPath $zipPath) { Remove-Item -Force -LiteralPath $zipPath }
+$indexedKeys = @{}
+foreach ($k in $icons.Keys) { $indexedKeys[$k] = $true }
+$zipCount = 0
+$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($png in (Get-ChildItem -LiteralPath $workDir -Filter *.png -File | Sort-Object Name)) {
+        $key = [System.IO.Path]::GetFileNameWithoutExtension($png.Name)
+        if (-not $indexedKeys.ContainsKey($key)) { continue }  # 索引に載るものだけ同梱
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+            $zip, $png.FullName, $png.Name, [System.IO.Compression.CompressionLevel]::NoCompression)
+        $zipCount++
+    }
+}
+finally { $zip.Dispose() }
+# 旧レイアウトの loose PNG が残っていれば掃除（zip 一本化）。zip 生成成功後に行う。
+Get-ChildItem -LiteralPath $starterDir -Filter *.png -File -ErrorAction SilentlyContinue | Remove-Item -Force
+$zipMb = [math]::Round((Get-Item -LiteralPath $zipPath).Length / 1MB, 2)
+Write-Host ("icons.zip を生成: {0} 件 / {1} MB -> {2}" -f $zipCount, $zipMb, $zipPath) -ForegroundColor Green
 
 # --- スタイル別 / カテゴリ別件数のサマリ ---
 Write-Host ""

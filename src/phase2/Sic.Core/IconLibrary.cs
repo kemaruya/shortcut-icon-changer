@@ -30,63 +30,104 @@ namespace Sic.Core
             var results = new List<IconItem>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            var sources = new (string? Path, string Source)[]
+            foreach (var rec in EnumerateSources())
             {
-                (SicPaths.StarterPath(), "starter"),
-                (SicPaths.LibraryPath(), "library"),
-            };
+                var ext = rec.Ext.ToLowerInvariant();
+                if (!exts.Contains(ext)) continue;
 
-            foreach (var (path, source) in sources)
-            {
-                if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) continue;
+                var key = rec.Key;
 
-                foreach (var file in Directory.EnumerateFiles(path!, "*", SearchOption.AllDirectories))
+                idx.TryGetValue(key, out var meta);
+
+                // 既定で非表示のスタイル（例: ハイコントラスト）はアプリから除外する。
+                // アセット/インデックスは残すが、一覧・ファセット・検索のいずれにも出さない。
+                var styleKey = meta?.Style ?? "";
+                if (!string.IsNullOrEmpty(styleKey) && HiddenStyles.Contains(styleKey))
+                    continue;
+
+                if (!seen.Add(key)) continue; // first wins (OrdinalIgnoreCase)
+
+                var item = new IconItem
                 {
-                    var ext = Path.GetExtension(file).ToLowerInvariant();
-                    if (!exts.Contains(ext)) continue;
+                    Name = key,
+                    Path = rec.FilePath,
+                    ZipPath = rec.ZipPath,
+                    ZipEntry = rec.ZipEntry,
+                    Source = rec.Source,
+                    Extension = ext,
+                    Category = meta?.Category ?? "",
+                    CategoryJa = meta?.CategoryJa ?? "",
+                    Colors = meta?.Colors ?? new List<string>(),
+                    Keywords = meta?.Keywords ?? new List<string>(),
+                    Style = meta?.Style ?? "",
+                    StyleJa = meta?.StyleJa ?? "",
+                    NameJa = meta?.NameJa,
+                };
 
-                    var key = Path.GetFileNameWithoutExtension(file);
+                if (string.IsNullOrEmpty(item.CategoryJa) && !string.IsNullOrEmpty(item.Category))
+                    item.CategoryJa = SicMaps.ToCategoryJa(item.Category);
+                if (string.IsNullOrEmpty(item.StyleJa) && !string.IsNullOrEmpty(item.Style))
+                    item.StyleJa = SicMaps.ToStyleJa(item.Style);
 
-                    idx.TryGetValue(key, out var meta);
+                // 英語名は index の nameEn を優先、無ければファイル名からスタイル接尾辞を除去。
+                item.NameEnBase = !string.IsNullOrEmpty(meta?.NameEn)
+                    ? meta!.NameEn!
+                    : StripStyleSuffix(key, item.StyleJa);
 
-                    // 既定で非表示のスタイル（例: ハイコントラスト）はアプリから除外する。
-                    // アセット/インデックスは残すが、一覧・ファセット・検索のいずれにも出さない。
-                    var styleKey = meta?.Style ?? "";
-                    if (!string.IsNullOrEmpty(styleKey) && HiddenStyles.Contains(styleKey))
-                        continue;
-
-                    if (!seen.Add(key)) continue; // first wins (OrdinalIgnoreCase)
-
-                    var item = new IconItem
-                    {
-                        Name = key,
-                        Path = file,
-                        Source = source,
-                        Extension = ext,
-                        Category = meta?.Category ?? "",
-                        CategoryJa = meta?.CategoryJa ?? "",
-                        Colors = meta?.Colors ?? new List<string>(),
-                        Keywords = meta?.Keywords ?? new List<string>(),
-                        Style = meta?.Style ?? "",
-                        StyleJa = meta?.StyleJa ?? "",
-                        NameJa = meta?.NameJa,
-                    };
-
-                    if (string.IsNullOrEmpty(item.CategoryJa) && !string.IsNullOrEmpty(item.Category))
-                        item.CategoryJa = SicMaps.ToCategoryJa(item.Category);
-                    if (string.IsNullOrEmpty(item.StyleJa) && !string.IsNullOrEmpty(item.Style))
-                        item.StyleJa = SicMaps.ToStyleJa(item.Style);
-
-                    // 英語名は index の nameEn を優先、無ければファイル名からスタイル接尾辞を除去。
-                    item.NameEnBase = !string.IsNullOrEmpty(meta?.NameEn)
-                        ? meta!.NameEn!
-                        : StripStyleSuffix(key, item.StyleJa);
-
-                    results.Add(item);
-                }
+                results.Add(item);
             }
 
             return results.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        /// <summary>列挙元の 1 レコード（loose ファイル または zip エントリ）。</summary>
+        private readonly struct SourceRec
+        {
+            public readonly string Key;
+            public readonly string Ext;
+            public readonly string FilePath;
+            public readonly string Source;
+            public readonly string? ZipPath;
+            public readonly string? ZipEntry;
+
+            public SourceRec(string key, string ext, string filePath, string source,
+                string? zipPath, string? zipEntry)
+            {
+                Key = key; Ext = ext; FilePath = filePath; Source = source;
+                ZipPath = zipPath; ZipEntry = zipEntry;
+            }
+        }
+
+        /// <summary>
+        /// スターター（icons.zip があれば zip エントリ、無ければ loose ファイル）と
+        /// ユーザー ライブラリ（常に loose ファイル）を順に列挙する。
+        /// </summary>
+        private static IEnumerable<SourceRec> EnumerateSources()
+        {
+            var starterZip = SicPaths.StarterZipPath();
+            if (starterZip != null)
+            {
+                foreach (var entryName in SicAssetZip.EntryNames(starterZip))
+                {
+                    var ext = Path.GetExtension(entryName);
+                    var key = Path.GetFileNameWithoutExtension(entryName);
+                    yield return new SourceRec(key, ext, "", "starter", starterZip, entryName);
+                }
+            }
+            else
+            {
+                var sp = SicPaths.StarterPath();
+                if (!string.IsNullOrEmpty(sp) && Directory.Exists(sp))
+                    foreach (var f in Directory.EnumerateFiles(sp!, "*", SearchOption.AllDirectories))
+                        yield return new SourceRec(
+                            Path.GetFileNameWithoutExtension(f), Path.GetExtension(f), f, "starter", null, null);
+            }
+
+            var lp = SicPaths.LibraryPath();
+            if (!string.IsNullOrEmpty(lp) && Directory.Exists(lp))
+                foreach (var f in Directory.EnumerateFiles(lp, "*", SearchOption.AllDirectories))
+                    yield return new SourceRec(
+                        Path.GetFileNameWithoutExtension(f), Path.GetExtension(f), f, "library", null, null);
         }
 
         /// <summary>"Rocket (フラット)" → "Rocket"。3D（接尾辞なし）はそのまま。</summary>

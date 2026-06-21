@@ -104,6 +104,31 @@
                 </StackPanel>
             </Button>
         </DataTemplate>
+
+        <!-- 仮想化リストの 1 行（横並びタイル。万一の幅誤差は WrapPanel が吸収） -->
+        <DataTemplate x:Key="RowTemplate" DataType="{x:Type vm:TileRow}">
+            <ItemsControl ItemsSource="{Binding Tiles}" ItemTemplate="{StaticResource TileTemplate}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </DataTemplate>
+
+        <!-- 行コンテナ: ListBoxItem の選択ハイライト/余白を除去（見た目はプレーンな行） -->
+        <Style x:Key="RowContainerStyle" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="14">
@@ -190,15 +215,20 @@
             </StackPanel>
         </Border>
 
-        <!-- アイコン グリッド -->
+        <!-- アイコン グリッド（行単位で仮想化。可視行のタイルのみデコード） -->
         <Border Grid.Row="3" Background="White" BorderBrush="#E2E2E2" BorderThickness="1" CornerRadius="8">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="6">
-                <ItemsControl ItemsSource="{Binding Tiles}" ItemTemplate="{StaticResource TileTemplate}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </ScrollViewer>
+            <ListBox x:Name="IconList" ItemsSource="{Binding Rows}"
+                     BorderThickness="0" Background="Transparent" Padding="6"
+                     HorizontalContentAlignment="Stretch"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     ItemContainerStyle="{StaticResource RowContainerStyle}"
+                     ItemTemplate="{StaticResource RowTemplate}"
+                     SizeChanged="IconList_SizeChanged" />
         </Border>
 
         <!-- フッター -->

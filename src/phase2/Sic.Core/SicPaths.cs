@@ -34,6 +34,23 @@ namespace Sic.Core
 
         public static string SettingsPath() => Path.Combine(Root(), "settings.json");
 
+        /// <summary>zip 同梱アイコンを適用時に取り出す展開先。</summary>
+        public static string ExtractedPath()
+        {
+            var p = Path.Combine(Root(), "starter-extracted");
+            Directory.CreateDirectory(p);
+            return p;
+        }
+
+        /// <summary>スターター アイコンを束ねた icons.zip のパス（存在すれば。無ければ null）。</summary>
+        public static string? StarterZipPath()
+        {
+            var sp = StarterPath();
+            if (string.IsNullOrEmpty(sp)) return null;
+            var z = Path.Combine(sp!, "icons.zip");
+            return File.Exists(z) ? z : null;
+        }
+
         /// <summary>同梱スターター アイコンの場所。導入レイアウト/開発レイアウト/環境変数を順に探索。</summary>
         public static string? StarterPath()
         {
