@@ -117,16 +117,26 @@ try {
     Write-Host ("  ライブラリ件数 = {0}" -f (@($lib).Count))
     Assert ($true) "Get-IconLibrary が例外なく動作する"
 
-    # --- 6b) タグ（カテゴリ/色調/キーワード）が付与される -----------------
+    # --- 6b) タグ（ジャンル/色調/スタイル/キーワード）が付与される ---------
     $lib = @(Get-IconLibrary)
     $first = $lib | Select-Object -First 1
     Assert ($null -ne $first.PSObject.Properties['Category']) "ライブラリ項目に Category プロパティがある"
     Assert ($null -ne $first.PSObject.Properties['Colors']) "ライブラリ項目に Colors プロパティがある"
+    Assert ($null -ne $first.PSObject.Properties['StyleJa']) "ライブラリ項目に StyleJa プロパティがある"
     $withCat = @($lib | Where-Object { $_.CategoryJa })
     $withCol = @($lib | Where-Object { @($_.Colors).Count -gt 0 })
-    Write-Host ("  カテゴリ付き = {0} / 色調付き = {1}" -f $withCat.Count, $withCol.Count)
-    Assert ($withCat.Count -gt 0) "カテゴリ タグが付与された項目がある（icons-index.json）"
+    $withStyle = @($lib | Where-Object { $_.StyleJa })
+    $styleNames = @($lib | Where-Object { $_.StyleJa } | Select-Object -ExpandProperty StyleJa -Unique)
+    Write-Host ("  ジャンル付き = {0} / 色調付き = {1} / スタイル付き = {2}" -f $withCat.Count, $withCol.Count, $withStyle.Count)
+    Write-Host ("  スタイル種別 = {0}" -f ($styleNames -join ', '))
+    Assert ($withCat.Count -gt 0) "ジャンル タグが付与された項目がある（icons-index.json）"
     Assert ($withCol.Count -gt 0) "色調タグが付与された項目がある"
+    Assert ($withStyle.Count -gt 0) "スタイル タグが付与された項目がある"
+
+    # --- 6c) スタイル ヘルパー --------------------------------------------
+    $styleOrder = @(Get-SicStyleOrder)
+    Assert ($styleOrder.Count -ge 3) "Get-SicStyleOrder が 3 種以上を返す"
+    Assert ((ConvertTo-SicStyleJa 'Flat') -eq 'フラット') "ConvertTo-SicStyleJa が Flat を日本語化する"
 
     # --- 7) Get-SicDominantColors -----------------------------------------
     $tones = @(Get-SicDominantColors -Path $pngPath)

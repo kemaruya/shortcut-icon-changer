@@ -113,23 +113,43 @@ Write-Host ("BAD_TAG=[" + `$win.Tag + "]"); exit 3
     Write-Host ("  " + ($clickOut -join ' '))
     Assert ($LASTEXITCODE -eq 0) "アイコンのクリックで選択パスが Window.Tag に入る (回帰テスト)"
 
-    # --- 4c) タグクラウド: チップで絞り込み / クリア / 既定に戻すボタン ---
+    # --- 4c) タグクラウド: スタイル/ジャンル/色調チップ・検索注釈・クリア・既定 ---
     $resetProbe = @"
 Import-Module '$installDir\SicCore.psm1' -Force
 . '$installDir\IconPicker.ps1'
 Add-Type -AssemblyName PresentationFramework
 `$win = New-SicIconPickerWindow -LnkPath '$lnk'
+`$style = `$win.FindName('StylePanel')
 `$cat = `$win.FindName('CategoryPanel')
 `$col = `$win.FindName('ColorPanel')
 `$clear = `$win.FindName('ClearTagsButton')
 `$panel = `$win.FindName('IconPanel')
 `$reset = `$win.FindName('ResetButton')
+`$sb = `$win.FindName('SearchBox')
+`$ph = `$win.FindName('SearchPlaceholder')
 if (-not `$reset) { Write-Host 'NO_RESET'; exit 2 }
 if (-not `$clear) { Write-Host 'NO_CLEAR'; exit 8 }
+if (-not `$style) { Write-Host 'NO_STYLE'; exit 9 }
+if (-not `$ph -or -not `$sb) { Write-Host 'NO_SEARCH'; exit 10 }
+if (`$style.Children.Count -lt 2) { Write-Host ('STYLE=' + `$style.Children.Count); exit 11 }
 if (`$cat.Children.Count -lt 5) { Write-Host ('CAT=' + `$cat.Children.Count); exit 4 }
 if (`$col.Children.Count -lt 5) { Write-Host ('COL=' + `$col.Children.Count); exit 5 }
 `$unfiltered = `$panel.Children.Count
-# 先頭のスタイル チップを ON にして Click を発火 → 再描画
+# 検索注釈（プレースホルダ）: 未入力で表示 / 入力で非表示
+if (`$ph.Visibility -ne [System.Windows.Visibility]::Visible) { Write-Host 'PH_INIT'; exit 12 }
+`$sb.Text = 'rocket'
+if (`$ph.Visibility -ne [System.Windows.Visibility]::Collapsed) { Write-Host 'PH_TYPED'; exit 13 }
+`$sb.Text = ''
+if (`$ph.Visibility -ne [System.Windows.Visibility]::Visible) { Write-Host 'PH_CLEARED'; exit 14 }
+# スタイル ファセット: 先頭スタイル チップ ON → 件数が減る
+`$schip = `$style.Children[0]
+`$schip.IsChecked = `$true
+`$schip.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+`$styleFiltered = `$panel.Children.Count
+if (-not (`$styleFiltered -gt 0 -and `$styleFiltered -lt `$unfiltered)) { Write-Host ("SFILTER unf=`$unfiltered fil=`$styleFiltered"); exit 15 }
+`$clear.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
+if (`$panel.Children.Count -ne `$unfiltered) { Write-Host ('SCLEAR ' + `$panel.Children.Count); exit 16 }
+# ジャンル ファセット: 先頭ジャンル チップ ON → 件数が減る
 `$chip = `$cat.Children[0]
 `$chip.IsChecked = `$true
 `$chip.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
@@ -141,14 +161,14 @@ if (-not (`$filtered -gt 0 -and `$filtered -lt `$unfiltered)) { Write-Host ("FIL
 if (`$cleared -ne `$unfiltered) { Write-Host ("CLEAR unf=`$unfiltered cl=`$cleared"); exit 7 }
 # 既定に戻すボタン → 番兵
 `$reset.RaiseEvent((New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent)))
-if (`$win.Tag -eq '__SIC_RESET__') { Write-Host ("CAT=`$(`$cat.Children.Count) COL=`$(`$col.Children.Count) UNF=`$unfiltered FIL=`$filtered"); exit 0 }
+if (`$win.Tag -eq '__SIC_RESET__') { Write-Host ("STYLE=`$(`$style.Children.Count) CAT=`$(`$cat.Children.Count) COL=`$(`$col.Children.Count) UNF=`$unfiltered SFIL=`$styleFiltered FIL=`$filtered"); exit 0 }
 Write-Host ('BAD_TAG=[' + `$win.Tag + ']'); exit 3
 "@
     $resetFile = Join-Path $work 'resetprobe.ps1'
     Set-Content -LiteralPath $resetFile -Value $resetProbe -Encoding UTF8
     $resetOut = & $psExe -NoProfile -STA -ExecutionPolicy Bypass -File $resetFile 2>&1
     Write-Host ("  " + ($resetOut -join ' '))
-    Assert ($LASTEXITCODE -eq 0) "タグクラウドで絞り込み/クリアが動作し、既定に戻すで番兵が Window.Tag に入る"
+    Assert ($LASTEXITCODE -eq 0) "スタイル/ジャンル/色調チップで絞り込み・検索注釈の表示制御・クリア・既定復帰が動作する"
 
     # --- 5) ランチャー -Reset で既定に戻す --------------------------------
     & $psExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $installDir 'Launch-IconPicker.ps1') -LnkPath $lnk -Reset
