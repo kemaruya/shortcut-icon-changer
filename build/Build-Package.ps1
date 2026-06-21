@@ -1,27 +1,29 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-    Phase 1 の配布パッケージを生成する: ZIP ＋ 自己解凍インストーラ EXE (IExpress)。
+    Phase 1 の配布パッケージを生成する: ZIP（既定）。
 .DESCRIPTION
-    リポジトリのアプリ一式をステージングし、以下を dist\ に出力する。
-      1. shortcut-icon-changer-phase1-v<VERSION>.zip
+    リポジトリのアプリ一式をステージングし、dist\ に出力する。
+      1. shortcut-icon-changer-phase1-v<VERSION>.zip （既定・推奨）
          展開して Install.cmd を実行すれば導入できる ZIP。
-      2. shortcut-icon-changer-phase1-v<VERSION>-installer.exe
-         Windows 同梱の IExpress による自己解凍インストーラ。ダブルクリックで導入。
-         （内部に上記 ZIP を内包し、展開して Install.ps1 を実行する。）
-    追加ランタイムやサードパーティ ツールは不要（IExpress は Windows 標準）。
+      2. shortcut-icon-changer-phase1-v<VERSION>-installer.exe （-WithExe 指定時のみ）
+         Windows 同梱の IExpress による自己解凍 EXE。
+         ※ IExpress 製 EXE は Microsoft Defender 等に「ウイルス」と誤検知され
+            ダウンロードがブロックされることが多い（署名なしのため）。既定では
+            生成しない。配布には ZIP を使うこと。
+    追加ランタイムやサードパーティ ツールは不要。
 .PARAMETER Version
     パッケージ バージョン。既定はリポジトリ ルートの VERSION ファイル。
 .PARAMETER OutDir
     出力先。既定は <repo>\dist。
-.PARAMETER SkipExe
-    自己解凍 EXE の生成を省略し ZIP のみ作る。
+.PARAMETER WithExe
+    IExpress による自己解凍 EXE も生成する（誤検知されやすいため非推奨）。
 #>
 [CmdletBinding()]
 param(
     [string] $Version,
     [string] $OutDir,
-    [switch] $SkipExe
+    [switch] $WithExe
 )
 
 Set-StrictMode -Version Latest
@@ -86,8 +88,13 @@ shortcut-icon-changer (Phase 1)  v$Version
 .lnk ショートカットのアイコンを右クリックから変更するツールです。
 Windows 11 標準機能のみで動作します（追加ランタイム不要・管理者権限不要）。
 
-インストール:
-  Install.cmd をダブルクリック（または右クリック→実行）してください。
+インストール手順:
+  1) この ZIP をダウンロードしたら、展開する前に
+     ZIP を右クリック →「プロパティ」→ 下部の「許可する(Unblock)」に
+     チェックして「OK」（ブラウザの警告/実行ブロックを避けるため。任意）。
+  2) ZIP を任意の場所に展開する。
+  3) Install.cmd をダブルクリック（または右クリック→実行）。
+     ※「WindowsによってPCが保護されました」が出たら「詳細情報」→「実行」。
   アプリは %LOCALAPPDATA%\Programs\ShortcutIconChanger にコピーされ、
   .lnk の右クリックメニューに「アイコンを変更」が追加されます。
 
@@ -109,8 +116,12 @@ if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $zipPath -Force
 Write-Host ("ZIP: {0}" -f $zipPath) -ForegroundColor Green
 
-# --- 3) 自己解凍 EXE (IExpress) -----------------------------------------
-if (-not $SkipExe) {
+# --- 3) 自己解凍 EXE (IExpress) — 既定では生成しない -------------------
+# IExpress 製 EXE は署名が無いと Defender 等に誤検知され、ブラウザの
+# ダウンロード段階で「ウイルスが検出されました」とブロックされることが多い。
+# 配布は ZIP を使うこと。EXE は -WithExe 指定時のみ生成する。
+if ($WithExe) {
+    Write-Warning "IExpress 製 EXE は署名なしのためウイルス誤検知でブロックされやすいです。配布には ZIP を推奨します。"
     $iexpress = Join-Path $env:WINDIR 'System32\iexpress.exe'
     if (-not (Test-Path $iexpress)) {
         Write-Warning "iexpress.exe が見つからないため EXE 生成をスキップします。"
