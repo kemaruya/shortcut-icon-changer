@@ -17,6 +17,10 @@ AppPackages/
 .cache/
 assets/fluent-emoji-full/
 
+# SVG ラスタライズ用のローカル キャッシュ（resvg / node_modules / 一時 SVG）
+node_modules/
+tools/.rastercache/
+
 # Distribution packages (attach to a GitHub Release instead of committing)
 dist/
 

@@ -40,6 +40,16 @@ $script:SicCategoryJa = @{
 # 色調タグの表示順（UI のコンボボックス並びにも使う）。
 $script:SicToneOrder = @('赤', '橙', '黄', '緑', '青', '紫', '桃', '茶', '白', '灰', '黒', '多色')
 
+# 見た目スタイル（英語）-> 表示用（日本語）。3D は PNG、Flat/High Contrast は SVG をビルド時に PNG 化。
+$script:SicStyleJa = @{
+    '3D'            = '3D'
+    'Flat'          = 'フラット'
+    'High Contrast' = 'ハイコントラスト'
+}
+
+# スタイル タグの表示順（UI のタグクラウド並びに使う）。
+$script:SicStyleOrder = @('3D', 'フラット', 'ハイコントラスト')
+
 function ConvertTo-SicCategoryJa {
     [CmdletBinding()]
     param([string] $Group)
@@ -51,6 +61,19 @@ function Get-SicToneOrder {
     [CmdletBinding()]
     param()
     return $script:SicToneOrder
+}
+
+function ConvertTo-SicStyleJa {
+    [CmdletBinding()]
+    param([string] $Style)
+    if ($Style -and $script:SicStyleJa.ContainsKey($Style)) { return $script:SicStyleJa[$Style] }
+    return $Style
+}
+
+function Get-SicStyleOrder {
+    [CmdletBinding()]
+    param()
+    return $script:SicStyleOrder
 }
 
 function Get-SicRoot {
@@ -128,7 +151,8 @@ function Get-IconLibrary {
         利用可能なアイコン（同梱スターター + 取得済みライブラリ）を列挙する。
     .OUTPUTS
         PSCustomObject[] : Name, Path, Source('starter'|'library'), Extension,
-                           Category, CategoryJa, Colors(string[]), Keywords(string[])
+                           Category, CategoryJa, Colors(string[]), Keywords(string[]),
+                           Style, StyleJa
     #>
     [CmdletBinding()]
     param(
@@ -154,13 +178,17 @@ function Get-IconLibrary {
                     $meta = $idx[$key]
                     $category = ''; $categoryJa = ''
                     $colors = @(); $keywords = @()
+                    $style = ''; $styleJa = ''
                     if ($meta) {
                         if ($meta.PSObject.Properties['category'])   { $category   = [string]$meta.category }
                         if ($meta.PSObject.Properties['categoryJa']) { $categoryJa = [string]$meta.categoryJa }
                         if ($meta.PSObject.Properties['colors']   -and $meta.colors)   { $colors   = @($meta.colors) }
                         if ($meta.PSObject.Properties['keywords'] -and $meta.keywords) { $keywords = @($meta.keywords) }
+                        if ($meta.PSObject.Properties['style'])      { $style      = [string]$meta.style }
+                        if ($meta.PSObject.Properties['styleJa'])    { $styleJa    = [string]$meta.styleJa }
                     }
                     if (-not $categoryJa -and $category) { $categoryJa = ConvertTo-SicCategoryJa $category }
+                    if (-not $styleJa -and $style) { $styleJa = ConvertTo-SicStyleJa $style }
                     $results.Add([PSCustomObject]@{
                         Name       = $_.BaseName
                         Path       = $_.FullName
@@ -170,6 +198,8 @@ function Get-IconLibrary {
                         CategoryJa = $categoryJa
                         Colors     = $colors
                         Keywords   = $keywords
+                        Style      = $style
+                        StyleJa    = $styleJa
                     })
                 }
             }
@@ -526,6 +556,7 @@ function Reset-ShortcutIcon {
 Export-ModuleMember -Function @(
     'Get-SicRoot', 'Get-SicLibraryPath', 'Get-SicCachePath', 'Get-SicStarterPath',
     'Get-SicIconIndex', 'ConvertTo-SicCategoryJa', 'Get-SicToneOrder',
+    'ConvertTo-SicStyleJa', 'Get-SicStyleOrder',
     'Get-IconLibrary', 'Convert-ToIco', 'Get-SicCachedIcon', 'Get-SicDominantColors',
     'Update-ShellIconCache', 'Set-ShortcutIcon', 'Reset-ShortcutIcon'
 )
