@@ -1,0 +1,28 @@
+# Build outputs
+bin/
+obj/
+out/
+publish/
+*.user
+
+# MSIX / signing artifacts (Phase 2)
+*.msix
+*.msixbundle
+*.appx
+*.pfx
+*.cer
+AppPackages/
+
+# Local icon cache / downloaded full emoji set
+.cache/
+assets/fluent-emoji-full/
+
+# Distribution packages (attach to a GitHub Release instead of committing)
+dist/
+
+# IDE / OS
+.vs/
+.vscode/
+*.suo
+Thumbs.db
+desktop.ini
