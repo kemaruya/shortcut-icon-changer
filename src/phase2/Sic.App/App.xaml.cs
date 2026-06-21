@@ -57,10 +57,28 @@ namespace Sic.App
             }
 
             // ピッカー UI
+            // 体感改善: UI パスと判定でき次第すぐにスプラッシュを表示し、ViewModel/ウィンドウ
+            // 構築や初回描画の待ち時間を覆う。スプラッシュはウィンドウの初回描画
+            // （ContentRendered）で短いフェードと共に閉じる。
+            var splash = new SplashScreen("Assets/splash.png");
+            splash.Show(autoClose: false);
+            bool splashClosed = false;
+            void CloseSplash()
+            {
+                if (splashClosed) return;
+                splashClosed = true;
+                splash.Close(TimeSpan.FromMilliseconds(250));
+            }
+
             var settings = AppSettings.Load();
             var vm = new MainViewModel(settings, hasLnk: lnk != null);
             var win = new MainWindow(vm);
-            win.ShowDialog();
+
+            // 初回描画後: スプラッシュを閉じ、残りのタイルの背景投入を開始する。
+            win.ContentRendered += (_, __) => { CloseSplash(); vm.StartDeferredFill(); };
+
+            try { win.ShowDialog(); }
+            finally { CloseSplash(); }
 
             var r = win.Result;
             if (r == null || r.Kind == PickKind.Cancel) return;

@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using Sic.App.Localization;
 using Sic.Core;
@@ -15,6 +16,13 @@ namespace Sic.App.ViewModels
     public sealed class MainViewModel : INotifyPropertyChanged
     {
         private const int MaxItems = 500;
+
+        // タイルの分割投入用。最初の 1 画面分だけ即時、残りは背景優先度で少しずつ。
+        private const int FirstChunk = 48;
+        private const int NextChunk = 32;
+        private int _populateToken;
+        private List<IconItem> _tail = new List<IconItem>();
+        private bool _windowShown;
 
         private readonly List<IconItem> _all;
         private readonly AppSettings _settings;
@@ -208,10 +216,76 @@ namespace Sic.App.ViewModels
             }
 
             var list = q.Take(MaxItems).ToList();
-            Tiles.Clear();
-            foreach (var it in list)
-                Tiles.Add(new IconTileVM(it, Loc.DisplayName(it, IsJapanese)));
             CountText = string.Format(Strings.CountFormat, list.Count);
+            PopulateTiles(list);
+        }
+
+        /// <summary>
+        /// タイルを分割投入する。最初の 1 画面分だけ即時に追加する。残りは:
+        /// ・初回（ウィンドウ未表示）はフィールドに退避し、<see cref="StartDeferredFill"/>
+        ///   （MainWindow の初回描画後に呼ばれる）まで投入を保留 → 初回描画が 48 枚で素早く完了。
+        /// ・以降（フィルタ変更時）は背景優先度で逐次投入。
+        /// フィルタが変わると進行中の投入は <see cref="_populateToken"/> で中断する。
+        /// </summary>
+        private void PopulateTiles(List<IconItem> list)
+        {
+            int token = ++_populateToken;
+            Tiles.Clear();
+            _tail = new List<IconItem>();
+
+            int first = Math.Min(FirstChunk, list.Count);
+            for (int i = 0; i < first; i++)
+                Tiles.Add(new IconTileVM(list[i], Loc.DisplayName(list[i], IsJapanese)));
+
+            if (first >= list.Count) return;
+            var tail = list.GetRange(first, list.Count - first);
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null)
+            {
+                // ディスパッチャ未取得（テスト等）は同期で全投入。
+                foreach (var it in tail)
+                    Tiles.Add(new IconTileVM(it, Loc.DisplayName(it, IsJapanese)));
+                return;
+            }
+
+            if (!_windowShown)
+            {
+                // ウィンドウ初回描画を 48 枚で素早く終わらせるため、残りは保留。
+                _tail = tail;
+                return;
+            }
+            StreamTail(tail, token, dispatcher);
+        }
+
+        private void StreamTail(List<IconItem> tail, int token, Dispatcher dispatcher)
+        {
+            int i = 0;
+            void AddMore()
+            {
+                if (token != _populateToken) return; // 新しいフィルタが来たので中断
+                int end = Math.Min(i + NextChunk, tail.Count);
+                for (; i < end; i++)
+                    Tiles.Add(new IconTileVM(tail[i], Loc.DisplayName(tail[i], IsJapanese)));
+                if (i < tail.Count)
+                    dispatcher.BeginInvoke((Action)AddMore, DispatcherPriority.Background);
+            }
+            dispatcher.BeginInvoke((Action)AddMore, DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// MainWindow の初回描画完了後に呼ぶ。保留していた残りタイルの背景投入を開始する。
+        /// 以降のフィルタ変更では <see cref="PopulateTiles"/> が即座に逐次投入する。
+        /// </summary>
+        public void StartDeferredFill()
+        {
+            _windowShown = true;
+            var tail = _tail;
+            _tail = new List<IconItem>();
+            if (tail.Count == 0) return;
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+            StreamTail(tail, _populateToken, dispatcher);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
