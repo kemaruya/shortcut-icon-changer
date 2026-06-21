@@ -16,4 +16,8 @@
     <ProjectReference Include="..\Sic.Core\Sic.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\splash.png" />
+  </ItemGroup>
+
 </Project>
