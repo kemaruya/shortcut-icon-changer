@@ -18,6 +18,7 @@
         <Style x:Key="ChipStyle" TargetType="ToggleButton">
             <Setter Property="Margin" Value="3" />
             <Setter Property="Padding" Value="9,3" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="Foreground" Value="#202020" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -47,15 +48,13 @@
         <DataTemplate x:Key="ChipTemplate" DataType="{x:Type vm:ChipVM}">
             <ToggleButton Style="{StaticResource ChipStyle}"
                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                          FontSize="{Binding FontSize}"
                           Content="{Binding Display}" />
         </DataTemplate>
 
         <!-- 色調チップ（色見本付き） -->
         <DataTemplate x:Key="ColorChipTemplate" DataType="{x:Type vm:ChipVM}">
             <ToggleButton Style="{StaticResource ChipStyle}"
-                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                          FontSize="{Binding FontSize}">
+                          IsChecked="{Binding IsChecked, Mode=TwoWay}">
                 <StackPanel Orientation="Horizontal">
                     <Ellipse Width="11" Height="11" Margin="0,0,6,0"
                              Stroke="#80000000" StrokeThickness="0.5"

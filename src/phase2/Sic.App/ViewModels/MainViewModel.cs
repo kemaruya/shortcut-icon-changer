@@ -117,17 +117,10 @@ namespace Sic.App.ViewModels
             Rebuild();
         }
 
-        private static double ScaleFont(int count, int min, int max)
-        {
-            if (max <= min) return 13.0;
-            double t = (double)(count - min) / (max - min);
-            return 11.0 + t * (17.0 - 11.0);
-        }
-
         private void BuildFacets(HashSet<string>? cs = null, HashSet<string>? cg = null, HashSet<string>? cc = null)
         {
             Styles.Clear(); Genres.Clear(); Colors.Clear();
-            Action onToggle = Rebuild;
+            Action<ChipVM> onToggle = OnChipToggled;
 
             // スタイル（正規英語キー、StyleOrder 順）
             var styleGroups = _all.Where(i => !string.IsNullOrEmpty(i.Style))
@@ -156,28 +149,46 @@ namespace Sic.App.ViewModels
                     colorCounts[c] = colorCounts.TryGetValue(c, out var n) ? n + 1 : 1;
 
             var colorList = colorCounts.OrderBy(kv => SicMaps.ToneIndex(kv.Key)).ToList();
-            int cmin = colorList.Count > 0 ? colorList.Min(kv => kv.Value) : 0;
-            int cmax = colorList.Count > 0 ? colorList.Max(kv => kv.Value) : 0;
             foreach (var kv in colorList)
             {
                 var chip = new ChipVM(kv.Key, Loc.ColorLabel(kv.Key, IsJapanese), kv.Value,
-                    ScaleFont(kv.Value, cmin, cmax), onToggle, isColor: true, swatch: ToneBrush(kv.Key));
+                    onToggle, isColor: true, swatch: ToneBrush(kv.Key));
                 if (cc != null && cc.Contains(kv.Key)) chip.SetCheckedSilently(true);
                 Colors.Add(chip);
             }
         }
 
         private static void FillChips(ObservableCollection<ChipVM> target,
-            List<(string Key, string Label, int Count)> data, Action onToggle, HashSet<string>? checkedKeys)
+            List<(string Key, string Label, int Count)> data, Action<ChipVM> onToggle, HashSet<string>? checkedKeys)
         {
-            int min = data.Count > 0 ? data.Min(d => d.Count) : 0;
-            int max = data.Count > 0 ? data.Max(d => d.Count) : 0;
             foreach (var d in data)
             {
-                var chip = new ChipVM(d.Key, d.Label, d.Count, ScaleFont(d.Count, min, max), onToggle);
+                var chip = new ChipVM(d.Key, d.Label, d.Count, onToggle);
                 if (checkedKeys != null && checkedKeys.Contains(d.Key)) chip.SetCheckedSilently(true);
                 target.Add(chip);
             }
+        }
+
+        /// <summary>
+        /// 行内は単一選択にする。あるタグを ON にしたら同じ行（スタイル/ジャンル/色）の
+        /// 他タグを外す。同じタグの再クリックによる OFF は ToggleButton の標準動作に任せる。
+        /// 行をまたぐ併用（スタイル×ジャンル×色）は従来どおり維持する。
+        /// </summary>
+        private void OnChipToggled(ChipVM chip)
+        {
+            if (chip.IsChecked)
+            {
+                ObservableCollection<ChipVM>? group =
+                      Styles.Contains(chip) ? Styles
+                    : Genres.Contains(chip) ? Genres
+                    : Colors.Contains(chip) ? Colors
+                    : null;
+                if (group != null)
+                    foreach (var c in group)
+                        if (!ReferenceEquals(c, chip) && c.IsChecked)
+                            c.SetCheckedSilently(false);
+            }
+            Rebuild();
         }
 
         private void ClearTags()
