@@ -7,36 +7,34 @@
         Height="740" Width="1000" MinHeight="520" MinWidth="760"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI Variable Text, Yu Gothic UI, Segoe UI, Meiryo UI"
-        FontSize="13" Background="#F3F3F3"
+        FontSize="13"
+        Background="{DynamicResource Sic.Window}" Foreground="{DynamicResource Sic.Text}"
         UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
 
     <Window.Resources>
-        <local:EmptyStringToVisibilityConverter x:Key="EmptyToVis" />
-        <local:NonEmptyStringToVisibilityConverter x:Key="NonEmptyToVis" />
-
         <!-- タグ チップ（ToggleButton） -->
         <Style x:Key="ChipStyle" TargetType="ToggleButton">
             <Setter Property="Margin" Value="3" />
             <Setter Property="Padding" Value="9,3" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#202020" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.ChipText}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="bd" CornerRadius="12" Background="#ECECEC"
-                                BorderBrush="#DADADA" BorderThickness="1"
+                        <Border x:Name="bd" CornerRadius="12" Background="{DynamicResource Sic.ChipBg}"
+                                BorderBrush="{DynamicResource Sic.ChipBorder}" BorderThickness="1"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E0E0E0" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.ChipBgHover}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#0067C0" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#0067C0" />
-                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.Accent}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Sic.Accent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Sic.AccentText}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -71,6 +69,7 @@
             <Setter Property="Margin" Value="4" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.Text}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -80,8 +79,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#FFFFFF" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#0067C0" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.TileHover}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Sic.Accent}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -135,12 +134,49 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- 対象ショートカット バー: どの .lnk のアイコンを変えるか + 現在のアイコン -->
+        <Border Grid.Row="0" Background="{DynamicResource Sic.Panel}" BorderBrush="{DynamicResource Sic.PanelBorder}"
+                BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 現在のアイコン プレビュー（未選択時は "?"） -->
+                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="6"
+                        Background="{DynamicResource Sic.ControlBg}" BorderBrush="{DynamicResource Sic.ControlBorder}"
+                        BorderThickness="1" Margin="0,0,12,0">
+                    <Grid>
+                        <Image Source="{Binding CurrentIcon}" Width="32" Height="32"
+                               Visibility="{Binding HasTarget, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Text="?" FontSize="22" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Sic.Subtle}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding HasTarget, Converter={StaticResource InvBoolToVis}}" />
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Strings.TargetLabel}" FontSize="11"
+                               Foreground="{DynamicResource Sic.TextSecondary}" />
+                    <TextBlock Text="{Binding TargetName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding TargetPath}" />
+                </StackPanel>
+
+                <Button Grid.Column="2" Content="{Binding ChooseTargetLabel}" Command="{Binding ChooseTargetCommand}"
+                        VerticalAlignment="Center" Padding="12,6" />
+            </Grid>
+        </Border>
+
         <!-- ヘッダー: 絞り込みラベル + 検索ボックス + 言語 -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
+        <Grid Grid.Row="1" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -154,30 +190,36 @@
             <Grid Grid.Column="1">
                 <TextBox x:Name="SearchBox" Padding="7,5" VerticalContentAlignment="Center"
                          Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=120}" />
-                <TextBlock Text="{Binding Strings.SearchPlaceholder}" Foreground="#9AA0A6"
+                <TextBlock Text="{Binding Strings.SearchPlaceholder}" Foreground="{DynamicResource Sic.Subtle}"
                            Margin="10,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
                            Visibility="{Binding SearchText, Converter={StaticResource EmptyToVis}}" />
             </Grid>
 
             <TextBlock Grid.Column="2" Text="{Binding Strings.LanguageLabel}"
                        VerticalAlignment="Center" Margin="16,0,6,0" />
-            <ComboBox Grid.Column="3" Width="116" SelectedIndex="{Binding LanguageChoice, Mode=TwoWay}">
-                <ComboBoxItem Content="{Binding Strings.LangAuto}" />
-                <ComboBoxItem Content="{Binding Strings.LangJa}" />
-                <ComboBoxItem Content="{Binding Strings.LangEn}" />
-            </ComboBox>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                <RadioButton Style="{StaticResource SegmentStyle}" GroupName="Lang"
+                             Content="{Binding Strings.LangAuto}"
+                             IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=0}" />
+                <RadioButton Style="{StaticResource SegmentStyle}" GroupName="Lang"
+                             Content="{Binding Strings.LangJa}"
+                             IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=1}" />
+                <RadioButton Style="{StaticResource SegmentStyle}" GroupName="Lang"
+                             Content="{Binding Strings.LangEn}"
+                             IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=2}" />
+            </StackPanel>
         </Grid>
 
-        <!-- 注記（ショートカット未指定時のみ） -->
-        <Border Grid.Row="1" Background="#FFF4E5" BorderBrush="#F0C77A" BorderThickness="1"
-                CornerRadius="6" Padding="10,6" Margin="0,0,0,10"
+        <!-- 注記（対象未選択時のヒント） -->
+        <Border Grid.Row="2" Background="{DynamicResource Sic.NoteBg}" BorderBrush="{DynamicResource Sic.NoteBorder}"
+                BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,10"
                 Visibility="{Binding NoteText, Converter={StaticResource NonEmptyToVis}}">
-            <TextBlock Text="{Binding NoteText}" Foreground="#8A5A00" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource Sic.NoteText}" TextWrapping="Wrap" />
         </Border>
 
         <!-- ファセット タグ クラウド -->
-        <Border Grid.Row="2" Background="White" BorderBrush="#E2E2E2" BorderThickness="1"
-                CornerRadius="8" Padding="10" Margin="0,0,0,10">
+        <Border Grid.Row="3" Background="{DynamicResource Sic.Panel}" BorderBrush="{DynamicResource Sic.PanelBorder}"
+                BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
             <StackPanel>
                 <DockPanel Margin="0,0,0,2">
                     <TextBlock Text="{Binding Strings.StyleFacet}" DockPanel.Dock="Left"
@@ -215,7 +257,8 @@
         </Border>
 
         <!-- アイコン グリッド（行単位で仮想化。可視行のタイルのみデコード） -->
-        <Border Grid.Row="3" Background="White" BorderBrush="#E2E2E2" BorderThickness="1" CornerRadius="8">
+        <Border Grid.Row="4" Background="{DynamicResource Sic.Panel}" BorderBrush="{DynamicResource Sic.PanelBorder}"
+                BorderThickness="1" CornerRadius="8">
             <ListBox x:Name="IconList" ItemsSource="{Binding Rows}"
                      BorderThickness="0" Background="Transparent" Padding="6"
                      HorizontalContentAlignment="Stretch"
@@ -231,8 +274,8 @@
         </Border>
 
         <!-- フッター -->
-        <Grid Grid.Row="4" Margin="0,12,0,0">
-            <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" Foreground="#606060" />
+        <Grid Grid.Row="5" Margin="0,12,0,0">
+            <TextBlock Text="{Binding CountText}" VerticalAlignment="Center" Foreground="{DynamicResource Sic.TextSecondary}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="{Binding Strings.ResetToDefault}" Command="{Binding ResetCommand}"
                         Padding="12,6" Margin="0,0,8,0" />

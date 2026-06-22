@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shortcut Icon Changer - Microsoft Store 配布用 完全(自己完結) MSIX マニフェスト。
+
+  installer\sparse\AppxManifest.xml(GitHub/MSI 用スパース)との違い:
+   - AllowExternalContent を持たない。exe/dll/assets をすべてパッケージ内に同梱する。
+   - unvirtualizedResources 制限付き機能を外す(Store 審査を簡素化)。書き込みは LocalCache へ
+     リダイレクトされるが、アプリ側が実体パスを解決して .lnk に記録するためアイコンは正しく表示される。
+   - アプリ一覧(スタート)に表示し、単体起動でも機能する(対象 .lnk をダイアログで選択)。
+   - Identity Name / Publisher / PublisherDisplayName はビルド時にトークン置換する:
+       ローカル/VM 検証 = 自己署名証明書のサブジェクト(既定 CN=kemaruya)。
+       Store 提出       = Partner Center が割り当てる Identity(予約名)と Publisher(発行者 ID)。
+     Store ではアップロード後に Microsoft が信頼された証明書で再署名するため、自己署名は不要。
+   - モダン コンテキスト メニュー(IExplorerCommand)は Win11 で第一階層と「その他のオプション」の
+     双方に現れる。CLSID はスパース版と共通(同時インストールは想定しない)。
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  IgnorableNamespaces="uap uap10 rescap desktop4 desktop5 com">
+
+  <Identity Name="__IDENTITY_NAME__"
+            ProcessorArchitecture="x64"
+            Publisher="__PUBLISHER__"
+            Version="__VERSION__" />
+
+  <Properties>
+    <DisplayName>Shortcut Icon Changer</DisplayName>
+    <PublisherDisplayName>__PUBLISHER_DISPLAY__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="ja-jp" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+  <Applications>
+    <Application Id="SicContextMenu"
+                 Executable="ShortcutIconChanger.exe"
+                 uap10:TrustLevel="mediumIL"
+                 uap10:RuntimeBehavior="win32App">
+      <uap:VisualElements DisplayName="Shortcut Icon Changer"
+                          Description="Change a Windows shortcut (.lnk) icon with colorful Fluent emoji."
+                          BackgroundColor="#0A5BD3"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="*">
+              <desktop5:Verb Id="ChangeIcon" Clsid="B6E6D7EA-EEBA-4B94-84CE-E34DCF06AD5C" />
+            </desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+        <com:Extension Category="windows.comServer" uap10:RuntimeBehavior="packagedClassicApp">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="Shortcut Icon Changer context menu handler">
+              <com:Class Id="B6E6D7EA-EEBA-4B94-84CE-E34DCF06AD5C"
+                         Path="Sic.ShellExt.dll"
+                         ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>

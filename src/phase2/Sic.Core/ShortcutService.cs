@@ -39,6 +39,35 @@ namespace Sic.Core
             return new ShortcutResult { LnkPath = lnkFull, IconPath = "", Index = 0, IsReset = true };
         }
 
+        /// <summary>
+        /// .lnk の現在の IconLocation を (パス, 索引) で読み取る。プレビュー表示用。
+        /// 既定（未設定）の場合はパスが空文字になる。読み取り失敗時は ("", 0)。
+        /// </summary>
+        public static (string Path, int Index) ReadIconLocation(string lnkPath)
+        {
+            var lnkFull = ValidateLnk(lnkPath);
+            var type = Type.GetTypeFromProgID("WScript.Shell");
+            if (type == null) return ("", 0);
+
+            object? shell = null;
+            try
+            {
+                shell = Activator.CreateInstance(type);
+                dynamic wsh = shell!;
+                dynamic sc = wsh.CreateShortcut(lnkFull);
+                string loc = sc.IconLocation as string ?? "";
+                Marshal.FinalReleaseComObject(sc);
+
+                int comma = loc.LastIndexOf(',');
+                if (comma < 0) return (loc.Trim(), 0);
+                var path = loc.Substring(0, comma).Trim();
+                int.TryParse(loc.Substring(comma + 1).Trim(), out var idx);
+                return (path, idx);
+            }
+            catch { return ("", 0); }
+            finally { if (shell != null) Marshal.FinalReleaseComObject(shell); }
+        }
+
         private static string ValidateLnk(string lnkPath)
         {
             if (!File.Exists(lnkPath))

@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>ShortcutIconChanger</AssemblyName>
     <RootNamespace>Sic.App</RootNamespace>
+    <Version>0.8.0</Version>
+    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>..\..\..\assets\app.ico</ApplicationIcon>
   </PropertyGroup>

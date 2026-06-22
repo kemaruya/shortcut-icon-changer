@@ -1,0 +1,64 @@
+<Window x:Class="Sic.App.HomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Strings.WindowTitle}"
+        Height="540" Width="580" MinHeight="460" MinWidth="460"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI Variable Text, Yu Gothic UI, Segoe UI, Meiryo UI"
+        FontSize="13"
+        Background="{DynamicResource Sic.Window}" Foreground="{DynamicResource Sic.Text}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="{Binding Strings.HomeHeadline}"
+                   FontSize="22" FontWeight="SemiBold" Margin="2,0,0,18" />
+
+        <StackPanel Grid.Row="1">
+            <!-- アイコンを変更 -->
+            <Button Style="{StaticResource CardButton}" Click="ChangeIcon_Click" Margin="0,0,0,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="&#x1F3A8;" FontSize="30" VerticalAlignment="Center" Margin="2,0,16,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Strings.CardChangeIconTitle}" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Strings.CardChangeIconDesc}" Foreground="{DynamicResource Sic.TextSecondary}"
+                                   TextWrapping="Wrap" Margin="0,3,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <!-- 設定 -->
+            <Button Style="{StaticResource CardButton}" Click="Settings_Click">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="&#x2699;" FontSize="30" VerticalAlignment="Center" Margin="2,0,16,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Strings.CardSettingsTitle}" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Strings.CardSettingsDesc}" Foreground="{DynamicResource Sic.TextSecondary}"
+                                   TextWrapping="Wrap" Margin="0,3,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </StackPanel>
+
+        <!-- フッター -->
+        <Grid Grid.Row="2" Margin="2,18,0,0">
+            <TextBlock Text="{Binding VersionText}" VerticalAlignment="Center"
+                       Foreground="{DynamicResource Sic.TextSecondary}" />
+            <Button Content="{Binding Strings.ViewOnGitHub}" Click="GitHub_Click"
+                    HorizontalAlignment="Right" Padding="12,5" />
+        </Grid>
+    </Grid>
+</Window>
