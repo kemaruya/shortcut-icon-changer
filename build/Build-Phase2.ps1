@@ -20,7 +20,8 @@
 [CmdletBinding()]
 param(
     [string]$Configuration = 'Release',
-    [switch]$RunTests
+    [switch]$RunTests,
+    [switch]$SkipModernMenu
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +33,8 @@ $AppProj    = Join-Path $Phase2  'Sic.App\Sic.App.csproj'
 $TestProj   = Join-Path $Phase2  'Sic.Core.Tests\Sic.Core.Tests.csproj'
 $Wxs        = Join-Path $RepoRoot 'installer\wix\Package.wxs'
 $AssetsDir  = Join-Path $RepoRoot 'assets\starter-icons'
+$ShellExtDir = Join-Path $RepoRoot 'src\shellext'
+$SparseDir   = Join-Path $RepoRoot 'installer\sparse'
 $DistDir    = Join-Path $RepoRoot 'dist'
 $StageDir   = Join-Path $DistDir  '_stage'
 
@@ -79,6 +82,21 @@ if ($RunTests) {
     Write-Host "`n[2/4] Skipping tests (-RunTests 未指定)" -ForegroundColor DarkGray
 }
 
+# 2.5) モダン メニュー成果物 (IExplorerCommand DLL + 署名済みスパース MSIX)
+$ModernMenu = -not $SkipModernMenu
+$sparseMsix = $null
+if ($ModernMenu) {
+    Write-Host "`n[+] Building modern context menu artifacts..." -ForegroundColor Yellow
+    & (Join-Path $ShellExtDir 'Build-ShellExt.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "Sic.ShellExt.dll のビルドに失敗しました ($LASTEXITCODE)" }
+    $sparseMsix = & (Join-Path $SparseDir 'Build-Sparse.ps1') -Version $ver | Select-Object -Last 1
+    if (-not $sparseMsix -or -not (Test-Path $sparseMsix)) { throw 'スパース MSIX のビルドに失敗しました (署名証明書が無い場合は New-SelfSignedCert.ps1 を先に実行)。' }
+    Write-Host "  shell ext dll : $(Join-Path $ShellExtDir 'Sic.ShellExt.dll')"
+    Write-Host "  sparse msix   : $sparseMsix"
+} else {
+    Write-Host "`n[+] Skipping modern context menu artifacts (-SkipModernMenu)" -ForegroundColor DarkGray
+}
+
 # 3) ステージング
 Write-Host "`n[3/4] Staging payload..." -ForegroundColor Yellow
 $binDir = Join-Path $Phase2 "Sic.App\bin\$Configuration\net48"
@@ -119,12 +137,22 @@ else {
     Write-Host "  staged files  : $((Get-ChildItem $StageDir -Recurse -File).Count) (icons: $iconCount)"
 }
 
+# モダン メニュー ファイル (DLL / 署名済み msix / 公開証明書 / 有効化・無効化ヘルパー)
+if ($ModernMenu) {
+    Copy-Item (Join-Path $ShellExtDir 'Sic.ShellExt.dll')        $StageDir -Force
+    Copy-Item $sparseMsix                                        $StageDir -Force
+    Copy-Item (Join-Path $SparseDir 'sic-codesign.cer')         $StageDir -Force
+    Copy-Item (Join-Path $SparseDir 'Enable-ModernMenu.ps1')    $StageDir -Force
+    Copy-Item (Join-Path $SparseDir 'Disable-ModernMenu.ps1')   $StageDir -Force
+    Write-Host "  modern menu   : Sic.ShellExt.dll + $(Split-Path $sparseMsix -Leaf) + cer + helpers"
+}
+
 # 4) MSI 生成
 Write-Host "`n[4/4] Building MSI with WiX..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 $msi = Join-Path $DistDir ("ShortcutIconChanger-{0}-perUser.msi" -f ((Get-Content (Join-Path $RepoRoot 'VERSION') -Raw).Trim()))
 
-& wix build $Wxs -d "StageDir=$StageDir" -d "ProductVersion=$ver" -arch x64 -o $msi
+& wix build $Wxs -d "StageDir=$StageDir" -d "ProductVersion=$ver" -arch x64 -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext -o $msi
 if ($LASTEXITCODE -ne 0) { throw "WiX ビルドに失敗しました ($LASTEXITCODE)" }
 
 $size = [math]::Round((Get-Item $msi).Length / 1MB, 2)

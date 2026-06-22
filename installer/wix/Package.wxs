@@ -7,12 +7,15 @@
     StageDir       … 配置するファイル一式 (exe / Sic.Core.dll / assets) のステージ ディレクトリ
     ProductVersion … 製品バージョン (例: 0.5.0.0)
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="Shortcut Icon Changer"
            Manufacturer="kemaruya"
            Version="$(var.ProductVersion)"
            UpgradeCode="{2335C038-7A6E-4537-BE89-FB586BFCB495}"
            Scope="perUser"
+           Codepage="932"
            Compressed="yes">
 
     <SummaryInformation Description="Shortcut Icon Changer"
@@ -20,6 +23,26 @@
 
     <MajorUpgrade DowngradeErrorMessage="より新しいバージョンが既にインストールされています。 / A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <!-- インストーラー UI (WixUI_Minimal: ようこそ/ライセンス → 完了)。
+         完了画面のオプトイン チェック (既定オフ) で Windows 11 モダン右クリック メニューを有効化する。 -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)license.rtf" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+              Value="Windows 11 のモダン右クリック メニューを有効にする (管理者の許可が必要) / Enable modern context menu (admin required)" />
+
+    <!-- チェック時のみ Enable-ModernMenu.ps1 を起動 (スクリプト側で UAC 昇格し証明書信頼＋スパース MSIX 登録)。
+         asyncNoWait でインストーラーをブロックしない。 -->
+    <CustomAction Id="EnableModernMenu"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[WindowsFolder]System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Enable-ModernMenu.ps1&quot;"
+                  Execute="immediate" Return="asyncNoWait" Impersonate="yes" />
+
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="EnableModernMenu"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
 
     <!-- %LOCALAPPDATA%\Programs\ShortcutIconChanger -->
     <StandardDirectory Id="LocalAppDataFolder">

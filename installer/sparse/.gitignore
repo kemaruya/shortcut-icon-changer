@@ -1,0 +1,9 @@
+# 秘密鍵・署名成果物・ローカル控え(コミットしない)
+*.pfx
+*.msix
+.signing-thumbprint.txt
+# 生成ロゴ等の作業物(通常は %TEMP% に出るが念のため)
+Assets/
+# 公開鍵 .cer はルート .gitignore の *.cer で除外されるため、ここで明示的に再追跡する
+# (公開鍵のみ・配布物に同梱してエンド ユーザー機で信頼取り込みに使う)
+!sic-codesign.cer

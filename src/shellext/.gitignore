@@ -1,0 +1,7 @@
+# ビルド生成物
+*.obj
+*.lib
+*.exp
+*.dll
+*.pdb
+*.ilk
