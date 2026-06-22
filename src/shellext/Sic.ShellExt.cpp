@@ -16,6 +16,22 @@
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "user32.lib")
+
+// パッケージ(スパース MSIX)のサロゲートから子プロセスを起動すると、その子は既定でパッケージ ID を
+// 継承し、%LOCALAPPDATA% への書き込みが Packages\<PFN>\LocalCache\... へ透過的にリダイレクトされる。
+// アプリ本体(ShortcutIconChanger.exe)はその影響で、実際に書き込んだ cache\*.ico の物理パスと、
+// .lnk に記録する IconLocation 文字列(非リダイレクトの %LOCALAPPDATA% 形)が食い違い、
+// Explorer がアイコン ファイルを見つけられずショートカットが白く表示される。これを避けるため、
+// アプリは「通常の デスクトップ アプリ」(パッケージ ID 無し)として起動する。
+// 下記は Windows 10 1703+ の DESKTOP_APP_POLICY 属性。古い SDK でも使えるよう未定義なら自前定義する。
+#ifndef PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY
+#define PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY \
+    ProcThreadAttributeValue(12, FALSE, TRUE, FALSE)  // ProcThreadAttributeDesktopAppPolicy
+#endif
+#ifndef PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE
+#define PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE 0x00000001
+#endif
 
 // {B6E6D7EA-EEBA-4B94-84CE-E34DCF06AD5C}
 static const GUID CLSID_ChangeIconCommand =
@@ -36,6 +52,85 @@ static bool GetAppExePath(wchar_t* out, size_t cch)
     if (FAILED(StringCchCopyW(out, cch, dll))) return false;
     if (FAILED(StringCchCatW(out, cch, L"ShortcutIconChanger.exe"))) return false;
     return true;
+}
+
+// アプリ本体をパッケージ ID から切り離した「通常の デスクトップ アプリ」として起動する。
+// スパース MSIX のサロゲート(dllhost)から起動した子は既定でパッケージ ID を継承し、
+// %LOCALAPPDATA% への書き込みが Packages\<PFN>\LocalCache\... へリダイレクトされてアイコン パスが
+// 食い違う(白アイコン)。さらに、対象 exe はパッケージの登録済み Application のため
+// DESKTOP_APP_BREAKAWAY 属性「単体」では ID を剥がせない。そこで「パッケージ ID を持たない
+// explorer.exe(シェル)を親プロセスに指定」して起動し、ID の継承元を断つ。これにより子は
+// 非リダイレクトの実 %LOCALAPPDATA% へ書き込み、.lnk の IconLocation と一致する。失敗時は
+// breakaway 単体 → ShellExecute の順にフォールバックする。
+static HANDLE OpenShellProcessForReparent()
+{
+    HWND shell = GetShellWindow();
+    if (!shell) return nullptr;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(shell, &pid);
+    if (pid == 0) return nullptr;
+    return OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
+}
+
+static void LaunchAppUnpackaged(const wchar_t* exe, const wchar_t* lnkPath)
+{
+    // 作業ディレクトリ = exe のあるフォルダ
+    wchar_t dir[MAX_PATH];
+    if (FAILED(StringCchCopyW(dir, ARRAYSIZE(dir), exe))) { dir[0] = L'\0'; }
+    else { wchar_t* slash = wcsrchr(dir, L'\\'); if (slash) *slash = L'\0'; }
+    const wchar_t* workDir = (dir[0] != L'\0') ? dir : nullptr;
+
+    // ShellExecute フォールバック用の引数 ("lnk") と CreateProcessW 用の可変コマンド ライン
+    // ("exe" "lnk")。CreateProcessW は lpCommandLine を書き換える可能性があるため可変バッファに置く。
+    wchar_t args[MAX_PATH + 4];
+    bool haveArgs = SUCCEEDED(StringCchPrintfW(args, ARRAYSIZE(args), L"\"%s\"", lnkPath));
+    wchar_t cmd[2 * MAX_PATH + 8];
+    bool haveCmd = SUCCEEDED(StringCchPrintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" \"%s\"", exe, lnkPath));
+
+    bool launched = false;
+    HANDLE hParent = OpenShellProcessForReparent();   // explorer.exe(パッケージ ID 無し)。失敗時 nullptr
+
+    if (haveCmd)
+    {
+        DWORD attrCount = (hParent ? 1u : 0u) + 1u;   // 親プロセス(任意) + DESKTOP_APP_POLICY
+        SIZE_T attrSize = 0;
+        InitializeProcThreadAttributeList(nullptr, attrCount, 0, &attrSize);
+        auto* attrList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
+            HeapAlloc(GetProcessHeap(), 0, attrSize));
+        if (attrList && InitializeProcThreadAttributeList(attrList, attrCount, 0, &attrSize))
+        {
+            bool parentSet = false;
+            if (hParent)
+                parentSet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+                                                      &hParent, sizeof(hParent), nullptr, nullptr) != FALSE;
+            DWORD policy = PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE;
+            bool policySet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY,
+                                                       &policy, sizeof(policy), nullptr, nullptr) != FALSE;
+            if (parentSet || policySet)
+            {
+                STARTUPINFOEXW si = {};
+                si.StartupInfo.cb = sizeof(si);
+                si.lpAttributeList = attrList;
+                PROCESS_INFORMATION pi = {};
+                if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE,
+                                   EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                                   nullptr, workDir, &si.StartupInfo, &pi))
+                {
+                    CloseHandle(pi.hThread);
+                    CloseHandle(pi.hProcess);
+                    launched = true;
+                }
+            }
+            DeleteProcThreadAttributeList(attrList);
+        }
+        if (attrList) HeapFree(GetProcessHeap(), 0, attrList);
+    }
+    if (hParent) CloseHandle(hParent);
+
+    // breakaway 起動に失敗した場合は従来どおり ShellExecute(この場合リダイレクトが起きうるが、
+    // アプリ側でも実体パスを解決して .lnk へ記録するため白アイコンは回避される)。
+    if (!launched)
+        ShellExecuteW(nullptr, L"open", exe, haveArgs ? args : nullptr, workDir, SW_SHOWNORMAL);
 }
 
 static bool IsJapaneseUi()
@@ -131,11 +226,7 @@ public:
         {
             wchar_t exe[MAX_PATH];
             if (GetAppExePath(exe, ARRAYSIZE(exe)))
-            {
-                wchar_t args[MAX_PATH + 4];
-                if (SUCCEEDED(StringCchPrintfW(args, ARRAYSIZE(args), L"\"%s\"", path)))
-                    ShellExecuteW(nullptr, L"open", exe, args, nullptr, SW_SHOWNORMAL);
-            }
+                LaunchAppUnpackaged(exe, path);
             CoTaskMemFree(path);
         }
         item->Release();
