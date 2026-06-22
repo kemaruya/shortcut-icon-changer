@@ -1,0 +1,132 @@
+<Window x:Class="Sic.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding Strings.SettingsTitle}"
+        Height="620" Width="560" MinHeight="480" MinWidth="460"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Segoe UI Variable Text, Yu Gothic UI, Segoe UI, Meiryo UI"
+        FontSize="13"
+        Background="{DynamicResource Sic.Window}" Foreground="{DynamicResource Sic.Text}"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Ideal">
+
+    <Window.Resources>
+        <Style x:Key="Section" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource Sic.Panel}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Sic.PanelBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+            <StackPanel>
+                <!-- 言語 -->
+                <Border Style="{StaticResource Section}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Strings.LanguageLabel}" />
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetLang"
+                                         Content="{Binding Strings.LangAuto}"
+                                         IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=0}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetLang"
+                                         Content="{Binding Strings.LangJa}"
+                                         IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=1}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetLang"
+                                         Content="{Binding Strings.LangEn}"
+                                         IsChecked="{Binding LanguageChoice, Converter={StaticResource EqBool}, ConverterParameter=2}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- テーマ -->
+                <Border Style="{StaticResource Section}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Strings.ThemeLabel}" />
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetTheme"
+                                         Content="{Binding Strings.ThemeSystem}"
+                                         IsChecked="{Binding Theme, Converter={StaticResource EqBool}, ConverterParameter=System}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetTheme"
+                                         Content="{Binding Strings.ThemeLight}"
+                                         IsChecked="{Binding Theme, Converter={StaticResource EqBool}, ConverterParameter=Light}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetTheme"
+                                         Content="{Binding Strings.ThemeDark}"
+                                         IsChecked="{Binding Theme, Converter={StaticResource EqBool}, ConverterParameter=Dark}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 既定のフォルダー -->
+                <Border Style="{StaticResource Section}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Strings.ShortcutFolderLabel}" />
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetFolder"
+                                         Content="{Binding Strings.FolderDesktop}"
+                                         IsChecked="{Binding Folder, Converter={StaticResource EqBool}, ConverterParameter=Desktop}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetFolder"
+                                         Content="{Binding Strings.FolderStartMenu}"
+                                         IsChecked="{Binding Folder, Converter={StaticResource EqBool}, ConverterParameter=StartMenu}" />
+                            <RadioButton Style="{StaticResource SegmentStyle}" GroupName="SetFolder"
+                                         Content="{Binding Strings.FolderCustom}"
+                                         IsChecked="{Binding Folder, Converter={StaticResource EqBool}, ConverterParameter=Custom}" />
+                        </StackPanel>
+                        <Grid Margin="0,10,0,0" Visibility="{Binding IsCustomFolder, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox Grid.Column="0" Padding="6,4" IsReadOnly="True"
+                                     Text="{Binding CustomFolder, Mode=OneWay}" VerticalContentAlignment="Center" />
+                            <Button Grid.Column="1" Content="{Binding Strings.BrowseFolder}" Click="Browse_Click"
+                                    Margin="8,0,0,0" Padding="12,5" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- キャッシュ -->
+                <Border Style="{StaticResource Section}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Strings.CacheLabel}" />
+                        <TextBlock Text="{Binding CacheSizeText}" Foreground="{DynamicResource Sic.TextSecondary}" Margin="0,0,0,8" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="{Binding Strings.ClearCache}" Click="ClearCache_Click" Padding="12,5" Margin="0,0,8,0" />
+                            <Button Content="{Binding Strings.OpenCacheFolder}" Click="OpenCache_Click" Padding="12,5" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- 情報 -->
+                <Border Style="{StaticResource Section}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Strings.AboutLabel}" />
+                        <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource Sic.TextSecondary}" Margin="0,0,0,8" />
+                        <Button Content="{Binding Strings.ViewOnGitHub}" Click="GitHub_Click"
+                                HorizontalAlignment="Left" Padding="12,5" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 下部バー -->
+        <Grid Grid.Row="1" Margin="0,12,0,0">
+            <Button Content="{Binding Strings.ResetSettings}" Click="ResetSettings_Click"
+                    HorizontalAlignment="Left" Padding="12,6" />
+            <Button Content="{Binding Strings.CloseLabel}" Click="Close_Click"
+                    HorizontalAlignment="Right" Padding="16,6" IsDefault="True" />
+        </Grid>
+    </Grid>
+</Window>

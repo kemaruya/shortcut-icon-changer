@@ -13,7 +13,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$OutDir
+    [string]$OutDir,
+    [string[]]$Defines
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,8 +32,10 @@ if (-not $vcvars) { throw 'vcvars64.bat が見つかりません。Visual Studio
 $dllOut = Join-Path $OutDir 'Sic.ShellExt.dll'
 Write-Host "vcvars : $vcvars"
 Write-Host "out    : $dllOut (x64, /MT)"
+if ($Defines) { Write-Host ("define : {0}" -f ($Defines -join ', ')) }
 
-$cl = "cl /nologo /std:c++17 /utf-8 /W3 /EHsc /MT /LD /DUNICODE /D_UNICODE Sic.ShellExt.cpp /link /DEF:Sic.ShellExt.def /OUT:`"$dllOut`""
+$defs = if ($Defines) { ($Defines | ForEach-Object { "/D$_" }) -join ' ' } else { '' }
+$cl = "cl /nologo /std:c++17 /utf-8 /W3 /EHsc /MT /LD /DUNICODE /D_UNICODE $defs Sic.ShellExt.cpp /link /DEF:Sic.ShellExt.def /OUT:`"$dllOut`""
 & $env:ComSpec /c "call `"$vcvars`" >nul 2>nul && cd /d `"$SrcDir`" && $cl"
 if ($LASTEXITCODE -ne 0) { throw "コンパイルに失敗しました (exit $LASTEXITCODE)。" }
 if (-not (Test-Path $dllOut)) { throw 'DLL が生成されませんでした。' }

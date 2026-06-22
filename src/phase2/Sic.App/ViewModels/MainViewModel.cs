@@ -34,7 +34,20 @@ namespace Sic.App.ViewModels
 
         public UiStrings Strings { get; private set; } = UiStrings.English();
         public bool IsJapanese { get; private set; }
-        public bool HasLnk { get; }
+
+        // 対象ショートカット（ヘッダー バーで選択/表示）
+        private string? _targetLnk;
+        public bool HasTarget => _targetLnk != null;
+        public string TargetName => HasTarget ? System.IO.Path.GetFileNameWithoutExtension(_targetLnk) : Strings.TargetNone;
+        public string TargetPath => _targetLnk ?? "";
+        public string ChooseTargetLabel => HasTarget ? Strings.ChangeTarget : Strings.ChooseTarget;
+
+        private ImageSource? _currentIcon;
+        public ImageSource? CurrentIcon
+        {
+            get => _currentIcon;
+            private set { _currentIcon = value; OnPropertyChanged(nameof(CurrentIcon)); }
+        }
 
         private string _searchText = "";
         public string SearchText
@@ -68,26 +81,34 @@ namespace Sic.App.ViewModels
         public RelayCommand ResetCommand { get; }
         public RelayCommand CustomCommand { get; }
         public RelayCommand ClearTagsCommand { get; }
+        public RelayCommand ChooseTargetCommand { get; }
 
         public event Action<PickResult>? RequestClose;
 
-        public MainViewModel(AppSettings settings, bool hasLnk)
+        public MainViewModel(AppSettings settings, string? targetLnk)
         {
             _settings = settings;
-            HasLnk = hasLnk;
+            _targetLnk = targetLnk;
             _all = IconLibrary.Enumerate();
             _languageChoice = (int)settings.Language;
             ApplyLanguageStrings();
 
+            if (_targetLnk != null)
+                _currentIcon = ShortcutIcon.LoadCurrentIcon(_targetLnk);
+
             ApplyCommand = new RelayCommand(p =>
             {
-                if (p is IconItem it)
-                    RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = SicAssets.ResolveForApply(it) });
+                if (p is IconItem it && EnsureTarget())
+                    RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = SicAssets.ResolveForApply(it), TargetLnk = _targetLnk });
             });
             ResetCommand = new RelayCommand(_ =>
-                RequestClose?.Invoke(new PickResult { Kind = PickKind.Reset }));
+            {
+                if (EnsureTarget())
+                    RequestClose?.Invoke(new PickResult { Kind = PickKind.Reset, TargetLnk = _targetLnk });
+            });
             CustomCommand = new RelayCommand(_ => OnCustom());
             ClearTagsCommand = new RelayCommand(_ => ClearTags());
+            ChooseTargetCommand = new RelayCommand(_ => ChooseTarget());
 
             BuildFacets();
             Rebuild();
@@ -97,10 +118,12 @@ namespace Sic.App.ViewModels
         {
             IsJapanese = Loc.IsJapanese((AppLanguage)_languageChoice);
             Strings = IsJapanese ? UiStrings.Japanese() : UiStrings.English();
-            NoteText = HasLnk ? "" : Strings.NoLnkNote;
+            NoteText = HasTarget ? "" : Strings.SelectTargetHint;
             ContextMenu.TryUpdateLabel(IsJapanese);
             OnPropertyChanged(nameof(Strings));
             OnPropertyChanged(nameof(IsJapanese));
+            OnPropertyChanged(nameof(TargetName));
+            OnPropertyChanged(nameof(ChooseTargetLabel));
         }
 
         private void OnLanguageChanged()
@@ -203,9 +226,47 @@ namespace Sic.App.ViewModels
 
         private void OnCustom()
         {
+            if (!EnsureTarget()) return;
             var dlg = new OpenFileDialog { Filter = Strings.OpenFileFilter, CheckFileExists = true };
             if (dlg.ShowDialog() == true)
-                RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = dlg.FileName });
+                RequestClose?.Invoke(new PickResult { Kind = PickKind.Apply, IconPath = dlg.FileName, TargetLnk = _targetLnk });
+        }
+
+        /// <summary>対象が未選択なら選択ダイアログを出す。対象が確定すれば true。</summary>
+        private bool EnsureTarget() => _targetLnk != null || ChooseTarget();
+
+        /// <summary>対象の .lnk を選ぶ。選択されたら対象とプレビューを更新して true。</summary>
+        private bool ChooseTarget()
+        {
+            var dlg = new OpenFileDialog
+            {
+                Filter = IsJapanese ? "ショートカット (*.lnk)|*.lnk" : "Shortcut (*.lnk)|*.lnk",
+                Title = IsJapanese ? "アイコンを変更するショートカット (.lnk) を選択してください"
+                                   : "Select a shortcut (.lnk) to change its icon",
+                CheckFileExists = true,
+                Multiselect = false,
+                InitialDirectory = SafeInitialDir(),
+            };
+            if (dlg.ShowDialog() != true) return false;
+            SetTarget(dlg.FileName);
+            return true;
+        }
+
+        private void SetTarget(string lnk)
+        {
+            _targetLnk = lnk;
+            CurrentIcon = ShortcutIcon.LoadCurrentIcon(lnk);
+            NoteText = "";
+            OnPropertyChanged(nameof(HasTarget));
+            OnPropertyChanged(nameof(TargetName));
+            OnPropertyChanged(nameof(TargetPath));
+            OnPropertyChanged(nameof(ChooseTargetLabel));
+        }
+
+        private string SafeInitialDir()
+        {
+            try { return _settings.ResolveShortcutFolder(); }
+            catch { return ""; }
         }
 
         private void Rebuild()

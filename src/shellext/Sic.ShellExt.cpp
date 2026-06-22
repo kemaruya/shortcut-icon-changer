@@ -54,14 +54,16 @@ static bool GetAppExePath(wchar_t* out, size_t cch)
     return true;
 }
 
-// アプリ本体をパッケージ ID から切り離した「通常の デスクトップ アプリ」として起動する。
-// スパース MSIX のサロゲート(dllhost)から起動した子は既定でパッケージ ID を継承し、
+// アプリ本体を起動する。
+// [GitHub/MSI スパース ビルド: 既定] サロゲート(dllhost)から起動した子は既定でパッケージ ID を継承し、
 // %LOCALAPPDATA% への書き込みが Packages\<PFN>\LocalCache\... へリダイレクトされてアイコン パスが
-// 食い違う(白アイコン)。さらに、対象 exe はパッケージの登録済み Application のため
-// DESKTOP_APP_BREAKAWAY 属性「単体」では ID を剥がせない。そこで「パッケージ ID を持たない
-// explorer.exe(シェル)を親プロセスに指定」して起動し、ID の継承元を断つ。これにより子は
-// 非リダイレクトの実 %LOCALAPPDATA% へ書き込み、.lnk の IconLocation と一致する。失敗時は
-// breakaway 単体 → ShellExecute の順にフォールバックする。
+// 食い違う(白アイコン)。対象 exe はパッケージの登録済み Application のため DESKTOP_APP_BREAKAWAY
+// 単体では ID を剥がせない。そこで「パッケージ ID を持たない explorer.exe(シェル)を親プロセスに指定」
+// して起動し、ID の継承元を断つ(非リダイレクトの実 %LOCALAPPDATA% へ書き込み、.lnk と一致)。
+// [Store(完全 MSIX)ビルド: SIC_STORE 定義時] コンテナ ID を尊重し reparent しない(審査上も自然)。
+// 書き込みは LocalCache へリダイレクトされるが、アプリ側が実体パス(GetFinalPathNameByHandle)を
+// 解決して .lnk に記録するため、アイコンは正しく表示される。
+#ifndef SIC_STORE
 static HANDLE OpenShellProcessForReparent()
 {
     HWND shell = GetShellWindow();
@@ -71,6 +73,7 @@ static HANDLE OpenShellProcessForReparent()
     if (pid == 0) return nullptr;
     return OpenProcess(PROCESS_CREATE_PROCESS, FALSE, pid);
 }
+#endif
 
 static void LaunchAppUnpackaged(const wchar_t* exe, const wchar_t* lnkPath)
 {
@@ -80,55 +83,60 @@ static void LaunchAppUnpackaged(const wchar_t* exe, const wchar_t* lnkPath)
     else { wchar_t* slash = wcsrchr(dir, L'\\'); if (slash) *slash = L'\0'; }
     const wchar_t* workDir = (dir[0] != L'\0') ? dir : nullptr;
 
-    // ShellExecute フォールバック用の引数 ("lnk") と CreateProcessW 用の可変コマンド ライン
-    // ("exe" "lnk")。CreateProcessW は lpCommandLine を書き換える可能性があるため可変バッファに置く。
+    // ShellExecute 用の引数 ("lnk")。
     wchar_t args[MAX_PATH + 4];
     bool haveArgs = SUCCEEDED(StringCchPrintfW(args, ARRAYSIZE(args), L"\"%s\"", lnkPath));
-    wchar_t cmd[2 * MAX_PATH + 8];
-    bool haveCmd = SUCCEEDED(StringCchPrintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" \"%s\"", exe, lnkPath));
 
     bool launched = false;
-    HANDLE hParent = OpenShellProcessForReparent();   // explorer.exe(パッケージ ID 無し)。失敗時 nullptr
 
-    if (haveCmd)
+#ifndef SIC_STORE
+    // reparent-to-explorer + breakaway でパッケージ ID を剥がして起動(GitHub/MSI スパース版のみ)。
+    // CreateProcessW は lpCommandLine を書き換える可能性があるため可変バッファ cmd に置く。
     {
-        DWORD attrCount = (hParent ? 1u : 0u) + 1u;   // 親プロセス(任意) + DESKTOP_APP_POLICY
-        SIZE_T attrSize = 0;
-        InitializeProcThreadAttributeList(nullptr, attrCount, 0, &attrSize);
-        auto* attrList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
-            HeapAlloc(GetProcessHeap(), 0, attrSize));
-        if (attrList && InitializeProcThreadAttributeList(attrList, attrCount, 0, &attrSize))
+        wchar_t cmd[2 * MAX_PATH + 8];
+        bool haveCmd = SUCCEEDED(StringCchPrintfW(cmd, ARRAYSIZE(cmd), L"\"%s\" \"%s\"", exe, lnkPath));
+        HANDLE hParent = OpenShellProcessForReparent();   // explorer.exe(パッケージ ID 無し)。失敗時 nullptr
+        if (haveCmd)
         {
-            bool parentSet = false;
-            if (hParent)
-                parentSet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
-                                                      &hParent, sizeof(hParent), nullptr, nullptr) != FALSE;
-            DWORD policy = PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE;
-            bool policySet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY,
-                                                       &policy, sizeof(policy), nullptr, nullptr) != FALSE;
-            if (parentSet || policySet)
+            DWORD attrCount = (hParent ? 1u : 0u) + 1u;   // 親プロセス(任意) + DESKTOP_APP_POLICY
+            SIZE_T attrSize = 0;
+            InitializeProcThreadAttributeList(nullptr, attrCount, 0, &attrSize);
+            auto* attrList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(
+                HeapAlloc(GetProcessHeap(), 0, attrSize));
+            if (attrList && InitializeProcThreadAttributeList(attrList, attrCount, 0, &attrSize))
             {
-                STARTUPINFOEXW si = {};
-                si.StartupInfo.cb = sizeof(si);
-                si.lpAttributeList = attrList;
-                PROCESS_INFORMATION pi = {};
-                if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE,
-                                   EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
-                                   nullptr, workDir, &si.StartupInfo, &pi))
+                bool parentSet = false;
+                if (hParent)
+                    parentSet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_PARENT_PROCESS,
+                                                          &hParent, sizeof(hParent), nullptr, nullptr) != FALSE;
+                DWORD policy = PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_ENABLE_PROCESS_TREE;
+                bool policySet = UpdateProcThreadAttribute(attrList, 0, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY,
+                                                           &policy, sizeof(policy), nullptr, nullptr) != FALSE;
+                if (parentSet || policySet)
                 {
-                    CloseHandle(pi.hThread);
-                    CloseHandle(pi.hProcess);
-                    launched = true;
+                    STARTUPINFOEXW si = {};
+                    si.StartupInfo.cb = sizeof(si);
+                    si.lpAttributeList = attrList;
+                    PROCESS_INFORMATION pi = {};
+                    if (CreateProcessW(exe, cmd, nullptr, nullptr, FALSE,
+                                       EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
+                                       nullptr, workDir, &si.StartupInfo, &pi))
+                    {
+                        CloseHandle(pi.hThread);
+                        CloseHandle(pi.hProcess);
+                        launched = true;
+                    }
                 }
+                DeleteProcThreadAttributeList(attrList);
             }
-            DeleteProcThreadAttributeList(attrList);
+            if (attrList) HeapFree(GetProcessHeap(), 0, attrList);
         }
-        if (attrList) HeapFree(GetProcessHeap(), 0, attrList);
+        if (hParent) CloseHandle(hParent);
     }
-    if (hParent) CloseHandle(hParent);
+#endif
 
-    // breakaway 起動に失敗した場合は従来どおり ShellExecute(この場合リダイレクトが起きうるが、
-    // アプリ側でも実体パスを解決して .lnk へ記録するため白アイコンは回避される)。
+    // 通常起動 / フォールバック。Store ビルド(SIC_STORE)は常にこちら。リダイレクトが起きうるが、
+    // アプリ側でも実体パスを解決して .lnk へ記録するため白アイコンは回避される。
     if (!launched)
         ShellExecuteW(nullptr, L"open", exe, haveArgs ? args : nullptr, workDir, SW_SHOWNORMAL);
 }

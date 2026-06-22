@@ -1,8 +1,6 @@
 using System;
 using System.Windows;
-using System.Windows.Interop;
 using System.Windows.Threading;
-using Sic.App.Interop;
 using Sic.App.ViewModels;
 
 namespace Sic.App
@@ -53,12 +51,7 @@ namespace Sic.App
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            try
-            {
-                var hwnd = new WindowInteropHelper(this).Handle;
-                DwmHelper.TryApplyDarkTitleBar(hwnd, DwmHelper.IsSystemDark());
-            }
-            catch { /* 外観の微調整失敗は無視 */ }
+            ThemeManager.ApplyTitleBar(this);
         }
     }
 }

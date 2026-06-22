@@ -1,7 +1,6 @@
 using System;
 using System.Windows;
 using Sic.App.Localization;
-using Sic.App.ViewModels;
 using Sic.Core;
 using Sic.Core.Localization;
 
@@ -56,39 +55,21 @@ namespace Sic.App
                 return;
             }
 
-            // ピッカー UI
-            // 体感改善: UI パスと判定でき次第すぐにスプラッシュを表示し、ViewModel/ウィンドウ
-            // 構築や初回描画の待ち時間を覆う。スプラッシュはウィンドウの初回描画
-            // （ContentRendered）で短いフェードと共に閉じる。
-            var splash = new SplashScreen("Assets/splash.png");
-            splash.Show(autoClose: false);
-            bool splashClosed = false;
-            void CloseSplash()
+            var settings = AppSettings.Load();
+            ThemeManager.Apply(settings);
+
+            // コンテキスト メニュー起動（対象 .lnk あり）: 即ピッカーを表示して適用する。
+            // 新規プロセスのコールド起動なので、遅延ゲート付きスプラッシュを有効にする。
+            if (lnk != null)
             {
-                if (splashClosed) return;
-                splashClosed = true;
-                splash.Close(TimeSpan.FromMilliseconds(250));
+                var r = AppFlow.ShowPicker(settings, lnk, enableSplash: true);
+                AppFlow.Apply(r);
+                return;
             }
 
-            var settings = AppSettings.Load();
-            var vm = new MainViewModel(settings, hasLnk: lnk != null);
-            var win = new MainWindow(vm);
-
-            // 初回描画後: スプラッシュを閉じる。タイルは行単位の仮想化により可視分だけ
-            // 実体化されるため、以前のような全タイルの遅延投入は不要。
-            win.ContentRendered += (_, __) => CloseSplash();
-
-            try { win.ShowDialog(); }
-            finally { CloseSplash(); }
-
-            var r = win.Result;
-            if (r == null || r.Kind == PickKind.Cancel) return;
-            if (lnk == null) return; // ショートカット未指定 → プレビューのみ
-
-            if (r.Kind == PickKind.Reset)
-                ShortcutService.ResetIcon(lnk);
-            else if (r.Kind == PickKind.Apply && !string.IsNullOrEmpty(r.IconPath))
-                ShortcutService.SetIcon(lnk, r.IconPath!);
+            // 単体起動（スタート メニュー/アプリ一覧/Store からの起動）: ホーム ハブを表示する。
+            var home = new HomeWindow(settings);
+            home.ShowDialog();
         }
 
         private static UiStrings ResolveStrings()

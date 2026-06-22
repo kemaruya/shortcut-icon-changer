@@ -1,4 +1,125 @@
 <Application x:Class="Sic.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ShutdownMode="OnExplicitShutdown" />
+             xmlns:local="clr-namespace:Sic.App"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <local:EmptyStringToVisibilityConverter x:Key="EmptyToVis" />
+        <local:NonEmptyStringToVisibilityConverter x:Key="NonEmptyToVis" />
+        <local:EqualityToBoolConverter x:Key="EqBool" />
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <local:InverseBooleanToVisibilityConverter x:Key="InvBoolToVis" />
+
+        <!-- テーマ対応の標準ボタン（フラット） -->
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Sic.ButtonBg}" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Sic.ButtonBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.ButtonBgHover}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- テーマ対応のテキスト ボックス -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource Sic.ControlBg}" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.Text}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource Sic.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Sic.ControlBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border CornerRadius="4" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- セグメント選択（RadioButton をチップ状に） -->
+        <Style x:Key="SegmentStyle" TargetType="RadioButton">
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Padding" Value="11,4" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.ChipText}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="bd" CornerRadius="12" Background="{DynamicResource Sic.ChipBg}"
+                                BorderBrush="{DynamicResource Sic.ChipBorder}" BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.ChipBgHover}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.Accent}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Sic.Accent}" />
+                                <Setter Property="Foreground" Value="{DynamicResource Sic.AccentText}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ホームのカード ボタン -->
+        <Style x:Key="CardButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource Sic.Panel}" />
+            <Setter Property="Foreground" Value="{DynamicResource Sic.Text}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Sic.PanelBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="10" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Sic.CardBgHover}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Sic.Accent}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Application.Resources>
+</Application>
+
