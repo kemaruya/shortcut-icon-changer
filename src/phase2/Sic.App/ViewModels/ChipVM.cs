@@ -7,12 +7,11 @@ namespace Sic.App.ViewModels
     /// <summary>ファセットの 1 タグ（チップ）。Key は正規値、Label はローカライズ済み表示。</summary>
     public sealed class ChipVM : INotifyPropertyChanged
     {
-        private readonly Action _onToggle;
+        private readonly Action<ChipVM> _onToggle;
 
         public string Key { get; }
         public string Label { get; }
         public int Count { get; }
-        public double FontSize { get; }
         public bool IsColor { get; }
         public Brush? Swatch { get; }
         public string Display => $"{Label} ({Count})";
@@ -27,18 +26,17 @@ namespace Sic.App.ViewModels
                 {
                     _isChecked = value;
                     OnPropertyChanged(nameof(IsChecked));
-                    _onToggle();
+                    _onToggle(this);
                 }
             }
         }
 
-        public ChipVM(string key, string label, int count, double fontSize, Action onToggle,
+        public ChipVM(string key, string label, int count, Action<ChipVM> onToggle,
                       bool isColor = false, Brush? swatch = null)
         {
             Key = key;
             Label = label;
             Count = count;
-            FontSize = fontSize;
             _onToggle = onToggle;
             IsColor = isColor;
             Swatch = swatch;
