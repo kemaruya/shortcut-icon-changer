@@ -7,6 +7,8 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Sic.Core
 {
@@ -117,7 +119,50 @@ namespace Sic.Core
 
             var dest = Path.Combine(SicPaths.CachePath(), hash + ".ico");
             if (!File.Exists(dest)) ConvertToIco(full, dest);
-            return dest;
+            return ResolveRealPath(dest);
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern uint GetFinalPathNameByHandleW(
+            SafeFileHandle hFile, StringBuilder lpszFilePath, uint cchFilePath, uint dwFlags);
+
+        /// <summary>
+        /// 与えられたパスのファイルを開き、OS が解決した「実体パス」を返す。
+        /// パッケージ(スパース MSIX)の ID を持つプロセスから %LOCALAPPDATA% へ書くと、書き込みは
+        /// Packages\&lt;PFN&gt;\LocalCache\... へ透過リダイレクトされるが、パス文字列は非リダイレクト形のまま
+        /// になる。.lnk の IconLocation に非リダイレクト形を書くと、ID を持たない Explorer が実ファイルを
+        /// 見つけられず白く表示される。そこで実際に書かれた物理パスを取得して .lnk へ記録する。
+        /// ID 無し(通常起動)の場合は通常の %LOCALAPPDATA% パスがそのまま返り、いずれの経路でも整合する。
+        /// </summary>
+        private static string ResolveRealPath(string path)
+        {
+            try
+            {
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                               FileShare.ReadWrite | FileShare.Delete))
+                {
+                    const uint FILE_NAME_NORMALIZED = 0x0;
+                    var sb = new StringBuilder(600);
+                    uint len = GetFinalPathNameByHandleW(fs.SafeFileHandle, sb, (uint)sb.Capacity, FILE_NAME_NORMALIZED);
+                    if (len == 0) return path;
+                    if (len > sb.Capacity)
+                    {
+                        sb = new StringBuilder((int)len + 1);
+                        len = GetFinalPathNameByHandleW(fs.SafeFileHandle, sb, (uint)sb.Capacity, FILE_NAME_NORMALIZED);
+                        if (len == 0) return path;
+                    }
+                    var real = sb.ToString();
+                    if (real.StartsWith(@"\\?\UNC\", StringComparison.Ordinal))
+                        real = @"\\" + real.Substring(8);
+                    else if (real.StartsWith(@"\\?\", StringComparison.Ordinal))
+                        real = real.Substring(4);
+                    return real;
+                }
+            }
+            catch
+            {
+                return path;
+            }
         }
     }
 }

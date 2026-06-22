@@ -1,0 +1,4 @@
+LIBRARY Sic.ShellExt
+EXPORTS
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE

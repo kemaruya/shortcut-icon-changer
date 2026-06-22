@@ -1,0 +1,8 @@
+# ビルド生成物 (PoC)
+*.obj
+*.lib
+*.exp
+*.dll
+*.pdb
+*.ilk
+Assets/
