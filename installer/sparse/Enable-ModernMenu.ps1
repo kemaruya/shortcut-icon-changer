@@ -65,6 +65,15 @@ if ($ImportCertOnly) {
 # ------- ユーザー側 -------
 try {
     Log "Enable-ModernMenu 開始 InstallDir=$InstallDir"
+
+    # モダン コンテキスト メニュー(IExplorerCommand 第一階層) は Windows 11 専用。
+    # Windows 10 以前では何もせず正常終了する(レガシー メニューの「アイコンを変更」は MSI が登録済み)。
+    $build = [Environment]::OSVersion.Version.Build
+    if ($build -lt 22000) {
+        Log "モダン コンテキスト メニューは Windows 11 (build >= 22000) 専用です。build=$build のためスキップします。"
+        exit 0
+    }
+
     if (-not $MsixPath) {
         $MsixPath = Get-ChildItem (Join-Path $InstallDir 'ShortcutIconChanger-ModernMenu-*.msix') -ErrorAction SilentlyContinue |
             Sort-Object Name -Descending | Select-Object -First 1 | ForEach-Object FullName
