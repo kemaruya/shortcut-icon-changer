@@ -58,6 +58,11 @@ namespace Sic.App
             var settings = AppSettings.Load();
             ThemeManager.Apply(settings);
 
+            // 右クリック動詞（アイコン・ラベル・コマンド）を実行中の exe に合わせて自己修復する。
+            // 旧版の登録やシェルのアイコン キャッシュ残骸（特に Windows 10）で右クリック
+            // アイコンが化ける問題を、初回起動時に直すための処理。キー未存在時は何もしない。
+            ContextMenu.TryRepair(Loc.IsJapanese(settings.Language));
+
             // コンテキスト メニュー起動（対象 .lnk あり）: 即ピッカーを表示して適用する。
             // 新規プロセスのコールド起動なので、遅延ゲート付きスプラッシュを有効にする。
             if (lnk != null)

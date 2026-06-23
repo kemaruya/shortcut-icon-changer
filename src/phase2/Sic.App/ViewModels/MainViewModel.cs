@@ -119,7 +119,7 @@ namespace Sic.App.ViewModels
             IsJapanese = Loc.IsJapanese((AppLanguage)_languageChoice);
             Strings = IsJapanese ? UiStrings.Japanese() : UiStrings.English();
             NoteText = HasTarget ? "" : Strings.SelectTargetHint;
-            ContextMenu.TryUpdateLabel(IsJapanese);
+            ContextMenu.TryRepair(IsJapanese);
             OnPropertyChanged(nameof(Strings));
             OnPropertyChanged(nameof(IsJapanese));
             OnPropertyChanged(nameof(TargetName));

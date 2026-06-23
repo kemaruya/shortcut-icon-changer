@@ -68,7 +68,7 @@
       <RegistryKey Root="HKCU" Key="Software\Classes\lnkfile\shell\sic.changeicon">
         <RegistryValue Type="string" Value="アイコンを変更(&amp;I)" KeyPath="yes" />
         <RegistryValue Name="Icon" Type="string"
-                       Value="[INSTALLFOLDER]ShortcutIconChanger.exe,0" />
+                       Value="&quot;[INSTALLFOLDER]ShortcutIconChanger.exe&quot;,0" />
       </RegistryKey>
       <RegistryKey Root="HKCU" Key="Software\Classes\lnkfile\shell\sic.changeicon\command">
         <RegistryValue Type="string"
