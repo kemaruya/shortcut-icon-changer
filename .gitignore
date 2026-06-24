@@ -31,6 +31,7 @@ dist/
 # IDE / OS
 .vs/
 .vscode/
+.tssbuddy/
 *.suo
 Thumbs.db
 desktop.ini
