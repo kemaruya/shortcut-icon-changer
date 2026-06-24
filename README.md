@@ -1,94 +1,96 @@
+**English** | [日本語](README.ja.md)
+
 # shortcut-icon-changer
 
-Windows のショートカット (`.lnk`) のアイコンを、右クリックメニューから手軽に・カラフルに変更するツールです。OS 標準アイコン (imageres.dll / shell32.dll) は色調が統一されていて数も限られるため、内容を見た目で判断しづらいという課題を解決します。
+A tool for changing the icon of a Windows shortcut (`.lnk`) quickly and colorfully, right from the context menu. The icons shipped with Windows (imageres.dll / shell32.dll) share a uniform color scheme and are limited in number, which makes shortcuts hard to tell apart at a glance — this tool solves that.
 
-> 状態: **v0.8.2** — ネイティブ アプリ + ユーザー単位 MSI インストーラー。ホーム画面・設定・ライト / ダーク テーマに対応し、**Windows 11 のモダン コンテキスト メニュー**にも任意で対応します。**Microsoft Store 配布を準備中**です。Windows 10 / 11 標準機能のみで動作し、追加ランタイムのインストール・ビルド・署名は不要です。
+> Status: **v0.8.2** — native app + per-user MSI installer. It includes a Home screen, Settings, and Light / Dark themes, and optionally supports the **Windows 11 modern context menu**. **Microsoft Store distribution is in preparation.** It runs using only built-in Windows 10 / 11 features — no extra runtime to install, no build, and no signing required.
 
-## スクリーンショット
+## Screenshots
 
-右クリックメニューから開くアイコン ピッカー。対象のショートカットと現在のアイコンを上部に表示し、約 2,570 種をスタイル・ジャンル・色調のタグやキーワードで絞り込めます。
+The icon picker opens from the context menu. It shows the target shortcut and its current icon at the top, and lets you filter roughly 2,570 icons by style / genre / color tags or by keyword.
 
-![アイコン ピッカー](docs/images/picker.png)
+![Icon picker](docs/images/en/picker.png)
 
-| ホーム画面（スタート メニューから起動） | 設定（言語・テーマ・フォルダー・キャッシュ） |
+| Home screen (launched from the Start menu) | Settings (language, theme, folder, cache) |
 | :---: | :---: |
-| ![ホーム画面](docs/images/home.png) | ![設定](docs/images/settings.png) |
+| ![Home screen](docs/images/en/home.png) | ![Settings](docs/images/en/settings.png) |
 
-## 特長
+## Features
 
-- 右クリック →「アイコンを変更」だけで `.lnk` のアイコンを変更できます。
-- **Windows 11 のモダン（第一階層）右クリックメニューに対応（任意）** — MSI インストール時のチェックボックスでオプトインすると、「その他のオプションを表示」を開かずに第一階層から「アイコンを変更」を実行できます。自己署名スパース MSIX を使うため、有効化時のみ証明書信頼の昇格（管理者・機械ごとに一度）が必要です。オフのままでもレガシー メニュー（「その他のオプションを表示」配下）から従来どおり利用できます。
-- カラフルなアイコン源として **Microsoft Fluent UI Emoji (MIT)** のほぼ全種を内蔵。**3D・フラットの 2 スタイル・計 約 2,570 種**を単一の `icons.zip` に同梱しており、ネット接続なしですぐ選べます（ハイコントラストは使用率が低いため同梱対象外）。一覧は**行単位の UI 仮想化**で描画するため、搭載数が多くても起動は高速です。
-- **スタイル・ジャンル・色調のタグクラウドで絞り込み** — ピッカー上部のタグをクリックすると一致するアイコンだけを表示します。各行（スタイル / ジャンル / 色）は**単一選択**で、別のタグを押すと同じ行内で選択が切り替わり、同じタグをもう一度押すと解除されます。行をまたいだ組み合わせ（例: スタイル×ジャンル×色）は AND で併用できます。
-- **上部のキーワード検索ボックス**で名前・ジャンル・スタイル・キーワードを横断検索できます（タグクラウドと併用可）。
-- **「既定に戻す」** ワンクリックで元の（ターゲット本来の）アイコンに戻せます。
-- **ライト / ダーク / システム追従のテーマ**にアプリ全体で対応します。
-- ユーザー独自の `.ico` / `.png` も指定できます（PNG はその場で `.ico` 化）。
-- **追加ランタイム不要**: Windows 10 / 11 に標準同梱の **.NET Framework 4.8（WPF, System.Drawing）** のみで動作します。エンドユーザーが別途インストールするものはありません。
-- 管理者権限不要（`HKCU` にユーザー単位で登録）。
+- Change the icon of a `.lnk` with just a right-click → "Change icon".
+- **Optional support for the Windows 11 modern (top-level) context menu** — opt in via a checkbox during MSI installation to run "Change icon" from the top level without opening "Show more options". Because it uses a self-signed sparse MSIX, a one-time certificate-trust elevation (per machine, requires administrator) is needed only when you enable it. If you leave it off, you can still use the app as before from the legacy menu (under "Show more options").
+- Built-in colorful icon source: nearly the entire **Microsoft Fluent UI Emoji (MIT)** set. **Two styles — 3D and Flat — totaling roughly 2,570 icons** are bundled in a single `icons.zip`, so you can pick one immediately with no internet connection (High Contrast is excluded as it is rarely used). The list is drawn with **row-level UI virtualization**, so startup stays fast even with a large catalog.
+- **Filter with a tag cloud of style / genre / color** — click a tag at the top of the picker to show only matching icons. Each row (style / genre / color) is **single-select**: pressing another tag switches the selection within that row, and pressing the same tag again clears it. Combinations across rows (e.g., style × genre × color) are combined with AND.
+- A **keyword search box at the top** searches across names, genres, styles, and keywords (can be combined with the tag cloud).
+- **"Reset to default"** restores the original (target's own) icon in one click.
+- **Light / Dark / Follow-system themes** are supported across the entire app.
+- You can also specify your own `.ico` / `.png` (PNG is converted to `.ico` on the fly).
+- **No extra runtime required**: it runs on only the **.NET Framework 4.8 (WPF, System.Drawing)** that ships with Windows 10 / 11. There is nothing for end users to install separately.
+- No administrator rights required (registered per user under `HKCU`).
 
-## 動作要件
+## Requirements
 
-- Windows 10 バージョン 22H2 または Windows 11
-- 追加インストール不要（Windows 同梱機能のみ）
-- 右クリックメニューの「アイコンを変更」は Windows 10 / 11 の両方で動作します。**モダン（第一階層）右クリックメニューは Windows 11 専用**で、Windows 10 では従来どおりの右クリックメニューから利用します。
+- Windows 10 version 22H2, or Windows 11
+- No additional installation (built-in Windows features only)
+- The "Change icon" context-menu entry works on both Windows 10 and 11. The **modern (top-level) context menu is Windows 11 only**; on Windows 10 you use it from the conventional context menu as before.
 
-## インストール
+## Installation
 
-[Releases](https://github.com/kemaruya/shortcut-icon-changer/releases) から `ShortcutIconChanger-X.Y.Z-perUser.msi` を入手し、ダブルクリックでインストールします（サイレントは `msiexec /i ShortcutIconChanger-0.8.2-perUser.msi /qn`）。管理者権限・UAC は不要です。`%LOCALAPPDATA%\Programs\ShortcutIconChanger` に導入され、`.lnk` の右クリックメニューに「アイコンを変更」が登録されます。
+Get `ShortcutIconChanger-X.Y.Z-perUser.msi` from [Releases](https://github.com/kemaruya/shortcut-icon-changer/releases) and double-click to install (silent: `msiexec /i ShortcutIconChanger-0.8.2-perUser.msi /qn`). No administrator rights or UAC are required. It is installed to `%LOCALAPPDATA%\Programs\ShortcutIconChanger`, and "Change icon" is registered in the `.lnk` context menu.
 
-インストール時の終了画面で**モダン コンテキスト メニュー**を有効化するか選べます（既定オフ）。有効化すると Windows 11 の第一階層メニューから直接「アイコンを変更」を実行できます（このときだけ、証明書信頼のため一度だけ管理者昇格が入ります）。
+On the finish screen of the installer you can choose whether to enable the **modern context menu** (off by default). When enabled, you can run "Change icon" directly from the Windows 11 top-level menu (only then does a one-time administrator elevation occur, to trust the certificate).
 
-アンインストールは「アプリと機能」から、またはサイレントに `msiexec /x ShortcutIconChanger-0.8.2-perUser.msi /qn` で行えます。
+To uninstall, use "Apps & features", or run silently: `msiexec /x ShortcutIconChanger-0.8.2-perUser.msi /qn`.
 
-## 使い方
+## Usage
 
-- **右クリックから**: 任意の `.lnk` を右クリック →「アイコンを変更」（モダン メニューを有効化していない場合は「その他のオプションを表示」配下）。ピッカーが開き、対象のショートカットと現在のアイコンが上部に表示されます。アイコンを選んで適用、または「既定に戻す」で元に戻せます。
-- **スタート メニューから**: 「Shortcut Icon Changer」を起動するとホーム画面が開きます。「アイコンを変更」から対象の `.lnk` を選んで変更でき、「設定」で言語・テーマ・既定のフォルダー・キャッシュを管理できます。
+- **From the context menu**: right-click any `.lnk` → "Change icon" (under "Show more options" if you have not enabled the modern menu). The picker opens with the target shortcut and its current icon shown at the top. Select an icon to apply it, or use "Reset to default" to restore the original.
+- **From the Start menu**: launch "Shortcut Icon Changer" to open the Home screen. Use "Change icon" to pick a target `.lnk` and change it, and use "Settings" to manage language, theme, the default folder, and the cache.
 
-## コマンドラインでの利用（UI なし）
+## Command-line usage (no UI)
 
-インストール先の `ShortcutIconChanger.exe`（既定では `%LOCALAPPDATA%\Programs\ShortcutIconChanger\ShortcutIconChanger.exe`）は、引数で UI を介さずに適用・リセットできます。
+The installed `ShortcutIconChanger.exe` (by default `%LOCALAPPDATA%\Programs\ShortcutIconChanger\ShortcutIconChanger.exe`) can apply or reset an icon via arguments, without going through the UI.
 
 ```powershell
 $exe = "$env:LOCALAPPDATA\Programs\ShortcutIconChanger\ShortcutIconChanger.exe"
 
-# アイコンを適用（PNG はその場で .ico 化）
+# Apply an icon (PNG is converted to .ico on the fly)
 & $exe -Lnk "C:\path\to\App.lnk" -IconPath "C:\path\to\icon.png"
 
-# アイコンを既定（ターゲット本来）に戻す
+# Reset the icon to default (the target's own)
 & $exe -Lnk "C:\path\to\App.lnk" -Reset
 
-# 対象 .lnk を渡してピッカーを開く（UI あり）
+# Open the picker with a target .lnk (with UI)
 & $exe "C:\path\to\App.lnk"
 ```
 
-引数なしで起動するとホーム画面が開きます。`.lnk` のパスは位置引数でも `-Lnk` でも指定できます。
+Launching with no arguments opens the Home screen. The `.lnk` path can be given either as a positional argument or with `-Lnk`.
 
-## 更新履歴（主な変更）
+## Changelog (main changes)
 
-- **v0.8.2** — **Windows 10（22H2）に正式対応**。右クリックメニューのアイコンが Windows 10 で正しく表示されるよう、アプリ起動時に右クリック動詞の登録（アイコン・ラベル・コマンド）を実行中の実行ファイルに合わせて自己修復し、シェルのアイコン キャッシュを更新するようにしました。これにより、旧版の登録やキャッシュの残骸でアイコンが化けていた場合も初回起動で直ります。モダン コンテキスト メニュー（Windows 11 専用）の有効化は Windows 10 では自動的にスキップします。
-- **v0.8.1** — 設定画面が内容の高さに合わせて自動的に広がるようになり、項目が見切れる問題を修正。リポジトリにスクリーンショットを追加。
-- **v0.8.0** — スタート メニューから起動できる**ホーム画面**と**設定画面**（言語・テーマ・既定のフォルダー・キャッシュ）を追加。アプリ全体で**ライト / ダーク / システム追従のテーマ**に対応。ピッカーに**対象バー**（変更対象の `.lnk` 名と現在のアイコン）を追加し、ホームから開いた場合は対象が未選択であることを明示。スプラッシュを**遅延ゲート式**に変更し、実際に描画が遅いときだけ表示。**Microsoft Store 配布用の完全 MSIX** ビルドを追加。
-- **v0.7.0** — **Windows 11 モダン コンテキスト メニュー対応（任意）**。`IExplorerCommand` を実装したネイティブ COM ハンドラ（C++・追加ランタイム不要）を自己署名スパース MSIX として同梱し、MSI の終了画面でオプトイン有効化できます。
-- **v0.6.x** — Fluent UI Emoji のほぼ全種を **3D・フラットの計 約 2,570 種**として同梱（単一 `icons.zip`）。一覧を**行単位で UI 仮想化**して起動を高速化。タグクラウドを**行内単一選択 + 行またぎ AND**に整理。
-- **v0.5.x** — **ネイティブ アプリ + ユーザー単位 MSI** 化。**日本語 / 英語の多言語対応**（UI 文言・アイコン表示名）。起動体感の改善（スプラッシュ・アイコンの分割読み込み）。
+- **v0.8.2** — **Official support for Windows 10 (22H2)**. So that the context-menu icon displays correctly on Windows 10, the app now self-heals the right-click verb registration (icon, label, command) on startup to match the running executable, and refreshes the shell icon cache. As a result, even if an icon was broken by a stale registration or cache from an older version, it is fixed on first launch. Enabling the modern context menu (Windows 11 only) is automatically skipped on Windows 10.
+- **v0.8.1** — The Settings screen now expands automatically to fit its content, fixing an issue where items were clipped. Added screenshots to the repository.
+- **v0.8.0** — Added a **Home screen** and a **Settings screen** (language, theme, default folder, cache) that can be launched from the Start menu. Added app-wide **Light / Dark / Follow-system themes**. Added a **target bar** to the picker (the `.lnk` name being changed and the current icon), making it clear when no target is selected (e.g., when opened from Home). Changed the splash to a **deferred-gate style** that appears only when rendering is actually slow. Added a **full MSIX build for Microsoft Store distribution**.
+- **v0.7.0** — **Optional Windows 11 modern context menu support**. A native COM handler implementing `IExplorerCommand` (C++, no extra runtime) is bundled as a self-signed sparse MSIX, and can be opted into from the MSI finish screen.
+- **v0.6.x** — Bundled nearly the entire Fluent UI Emoji set as **roughly 2,570 icons across 3D and Flat** (a single `icons.zip`). Sped up startup by applying **row-level UI virtualization** to the list. Reorganized the tag cloud into **single-select within a row + AND across rows**.
+- **v0.5.x** — Became a **native app + per-user MSI**. **Japanese / English localization** (UI text and icon display names). Improved perceived startup (splash, split loading of icons).
 
-## ビルド（開発者向け）
+## Building (for developers)
 
 ```powershell
-# Release ビルド → ステージング → WiX で MSI 生成
+# Release build → staging → generate MSI with WiX
 powershell.exe -ExecutionPolicy Bypass -File .\build\Build-Phase2.ps1
-# → dist\ShortcutIconChanger-X.Y.Z-perUser.msi を出力（-RunTests で Core テストも実行）
+# → outputs dist\ShortcutIconChanger-X.Y.Z-perUser.msi (-RunTests also runs the Core tests)
 ```
 
-> ビルドには Visual Studio 2022/2026（MSBuild）と WiX 6 グローバル ツール（`dotnet tool install --global wix`）が必要です。エンドユーザーの実行環境には不要です。
+> Building requires Visual Studio 2022/2026 (MSBuild) and the WiX 6 global tool (`dotnet tool install --global wix`). Neither is needed in the end-user runtime environment.
 
-## アーキテクチャ / 設計
+## Architecture / design
 
-[docs/architecture.md](docs/architecture.md) を参照してください。ネイティブ WPF アプリ + WiX ユーザー単位 MSI + 日本語 / 英語 i18n の構成をまとめています。
+See [docs/architecture.md](docs/architecture.md). It summarizes the design: a native WPF app + a WiX per-user MSI + Japanese / English i18n.
 
-## ライセンス
+## License
 
-- 本リポジトリのコード: [MIT](LICENSE)
-- 同梱・取得するアイコン: Microsoft Fluent UI Emoji (MIT)。[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照。
+- Code in this repository: [MIT](LICENSE)
+- Bundled / fetched icons: Microsoft Fluent UI Emoji (MIT). See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
