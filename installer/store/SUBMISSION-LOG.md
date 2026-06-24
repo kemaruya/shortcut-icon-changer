@@ -11,7 +11,7 @@
 | Store ID | `9P09F3CQ5HX7` |
 | Package Identity Name | `62620kemaruya.ShortcutIconChanger` |
 | Publisher | `CN=32436F7F-046A-45D3-AFAB-BCA722A88C2E` |
-| Publisher Display Name | `Kenichi Maruyama` |
+| Publisher Display Name | (公開リポジトリのため非掲載 / Partner Center 参照) |
 | Package Family Name (PFN) | `62620kemaruya.ShortcutIconChanger_a43rhmf9187gj` |
 
 > これらは `STORE-SUBMISSION.md` §2/§3 の「控える 3 値」の確定版です。`Build-Store.ps1` に渡す `-IdentityName` / `-Publisher` / `-PublisherDisplay` は上記を完全一致で使用します（プレースホルダー例ではなくこの値が正）。
@@ -73,8 +73,8 @@
 
 ### 作業用 CSV の所在（リポジトリ外）
 
-- 成功した取り込みファイル: `C:\Users\kemaruya\Downloads\listingData-9P09F3CQ5HX7-TEXTONLY.csv`
-- 元のエクスポート: `C:\Users\kemaruya\Downloads\listingData-9P09F3CQ5HX7-1152921505701289700.csv`
+- 成功した取り込みファイル: `%USERPROFILE%\Downloads\listingData-9P09F3CQ5HX7-TEXTONLY.csv`
+- 元のエクスポート: `%USERPROFILE%\Downloads\listingData-9P09F3CQ5HX7-1152921505701289700.csv`
 - 必要なら `installer/store/listing/` にコピーして残すことを検討（任意・未実施）。
 
 ---
