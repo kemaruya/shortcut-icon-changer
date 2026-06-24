@@ -1,94 +1,96 @@
-# アーキテクチャと設計
+**English** | [日本語](architecture.ja.md)
 
-`.lnk`（Windows ショートカット）のアイコンを右クリックから手軽に・カラフルに変更するツールの設計をまとめます。
+# Architecture and design
 
-## 要件
+This document summarizes the design of a tool for changing the icon of a `.lnk` (Windows shortcut) quickly and colorfully from the context menu.
 
-| # | 要件 | 由来 |
+## Requirements
+
+| # | Requirement | Origin |
 |---|------|------|
-| R1 | `.lnk` のアイコンを右クリックメニューから変更できる | 元相談 |
-| R2 | カラフルなアイコンを多数から選べる | 元相談（OS 標準は色調統一・数不足）|
-| R3 | ユーザー独自の `.ico` / `.png` /（将来）`.svg` も指定可能 | 設計合意 |
-| R4 | Windows 11 の**新（モダン）コンテキストメニュー**に対応 | 設計合意 |
-| R5 | なるべく**新しいツールセット**で実装 | 追加要望 |
-| R6 | **追加ランタイムのインストール不要・Windows 11 標準機能のみ**で動作（可能であれば）| 追加要望（最重要）|
+| R1 | Change a `.lnk`'s icon from the context menu | Original request |
+| R2 | Choose from many colorful icons | Original request (the OS set is uniform in color and limited in number) |
+| R3 | Also allow user-supplied `.ico` / `.png` / (future) `.svg` | Design agreement |
+| R4 | Support the Windows 11 **new (modern) context menu** | Design agreement |
+| R5 | Implement with a **modern toolset** where possible | Additional request |
+| R6 | Run with **no extra runtime to install — using only built-in Windows 11 features** (if possible) | Additional request (highest priority) |
 
-R4 と R6 はトレードオフがある（モダンメニューは `IExplorerCommand` + パッケージ化が必須で、ビルド・自己署名・サイドロードを伴う）。このため **段階実装** を採用する。
+R4 and R6 are in tension (the modern menu requires `IExplorerCommand` + packaging, which entails building, self-signing, and sideloading). For this reason a **phased implementation** is adopted.
 
-## アイコンの基本原理
+## Basic principle of icons
 
-`.lnk` 自体は「アイコンの場所 (IconLocation)」への参照を持つだけ。書き換えは COM 1 行で完結する。
+A `.lnk` itself only holds a reference to an "icon location" (IconLocation). Rewriting it is a one-line COM operation.
 
 ```powershell
 $sh  = New-Object -ComObject WScript.Shell
 $lnk = $sh.CreateShortcut($lnkPath)
-$lnk.IconLocation = "$icoPath,0"   # "<ファイル>,<アイコン索引>"
+$lnk.IconLocation = "$icoPath,0"   # "<file>,<icon index>"
 $lnk.Save()
 ```
 
-`IconLocation` が指せるのはアイコンを含むファイル（`.ico` / `.exe` / `.dll`）。PNG は直接指せないため、選択された PNG はその場で `.ico` に変換してキャッシュする。
+`IconLocation` can only point to a file that contains an icon (`.ico` / `.exe` / `.dll`). PNG cannot be pointed to directly, so a selected PNG is converted to `.ico` on the fly and cached.
 
-## アイコン源
+## Icon sources
 
-- **同梱/取得ライブラリ**: Microsoft Fluent UI Emoji（3D スタイル, PNG ラスター, MIT, 約 1,300 種）。色彩豊かで「内容を絵で判断」する用途に最適。
-  - Phase 1 は in-box に SVG ラスタライザが無いため、PNG が提供される **3D スタイル**を採用（Flat/Color/High Contrast は SVG のみ）。
-  - リポジトリには少数のスターターセット (`assets/starter-icons/`) のみ同梱。
-  - 全種は `tools/Fetch-FluentEmoji.ps1` で `%LOCALAPPDATA%\ShortcutIconChanger\library` に取得。
-- **カスタム**: ユーザー指定の `.ico` / `.png`（Phase 1.5 で `.svg`）。PNG/SVG はその場で `.ico` 化。
+- **Bundled / fetched library**: Microsoft Fluent UI Emoji (3D style, PNG raster, MIT, ~1,300 icons). Rich in color and ideal for "judging contents by a picture".
+  - Phase 1 has no in-box SVG rasterizer, so it uses the **3D style**, which is provided as PNG (Flat / Color / High Contrast are SVG only).
+  - The repository bundles only a small starter set (`assets/starter-icons/`).
+  - The full set is fetched by `tools/Fetch-FluentEmoji.ps1` into `%LOCALAPPDATA%\ShortcutIconChanger\library`.
+- **Custom**: user-supplied `.ico` / `.png` (`.svg` in Phase 1.5). PNG / SVG are converted to `.ico` on the fly.
 
-## Phase 1 — Windows 11 標準機能のみ（追加ランタイム/ビルド/署名なし）
+## Phase 1 — built-in Windows 11 features only (no extra runtime / build / signing)
 
-R1・R2・R3・R6 を満たす「今すぐ動く版」。R4（モダンメニュー）は満たさず、レガシー（「その他のオプションを表示」）メニューに表示される。
+A "works right now" version that satisfies R1, R2, R3, and R6. It does not satisfy R4 (modern menu) and appears in the legacy menu ("Show more options").
 
-### 構成
+### Structure
 
 ```
-.lnk 右クリック
+.lnk right-click
   └─ HKCU\Software\Classes\lnkfile\shell\sic.ChangeIcon\command
         └─ powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass
                -File Launch-IconPicker.ps1 -LnkPath "%1"
-                 ├─ IconPicker.ps1  … WPF グリッドで選択（同梱 .NET FW 4.8）
+                 ├─ IconPicker.ps1  … select via WPF grid (bundled .NET FW 4.8)
                  └─ SicCore.psm1    … Convert-ToIco / Set-ShortcutIcon / SHChangeNotify
 ```
 
-### 標準機能のみで成立する根拠（R6）
+### Why it works with built-in features only (R6)
 
-| 必要機能 | 利用するもの | 追加インストール |
+| Capability needed | What it uses | Extra install |
 |---|---|---|
-| スクリプト実行 | **Windows PowerShell 5.1**（`powershell.exe`, OS 同梱）| 不要 |
-| ピッカー UI | **.NET Framework 4.8 の WPF**（PresentationFramework, OS 同梱）| 不要 |
-| 画像変換 | **System.Drawing**（GDI+, OS 同梱）| 不要 |
-| `.lnk` 書き換え | **WScript.Shell COM**（OS 同梱）| 不要 |
-| メニュー登録 | レジストリ `HKCU`（管理者権限不要）| 不要 |
+| Script execution | **Windows PowerShell 5.1** (`powershell.exe`, ships with the OS) | Not required |
+| Picker UI | **WPF in .NET Framework 4.8** (PresentationFramework, ships with the OS) | Not required |
+| Image conversion | **System.Drawing** (GDI+, ships with the OS) | Not required |
+| `.lnk` rewriting | **WScript.Shell COM** (ships with the OS) | Not required |
+| Menu registration | Registry `HKCU` (no administrator rights) | Not required |
 
-> 重要: 起動は PowerShell 7 (`pwsh.exe`, 別途インストール) ではなく **`powershell.exe`（5.1）** を使う。素の Windows 11 に同梱されるのは 5.1 のため。スクリプトは 5.1 互換で書く（WPF は STA 必須 → 5.1 既定の STA で動作）。
+> Important: launch via **`powershell.exe` (5.1)**, not PowerShell 7 (`pwsh.exe`, installed separately), because what ships with a plain Windows 11 is 5.1. Scripts are written to be 5.1-compatible (WPF requires STA → it works under 5.1's default STA).
 
-### PNG → ICO 変換
+### PNG → ICO conversion
 
-`System.Drawing` で複数サイズ（16/32/48/256）にリサイズし、ICO コンテナを自前生成（各エントリは PNG エンコードで格納。Windows 11 は PNG 圧縮エントリを読める）。生成物は `%LOCALAPPDATA%\ShortcutIconChanger\cache` にハッシュ名でキャッシュ。
+`System.Drawing` resizes to multiple sizes (16/32/48/256) and an ICO container is generated in-house (each entry is stored as PNG-encoded; Windows 11 can read PNG-compressed entries). The result is cached under `%LOCALAPPDATA%\ShortcutIconChanger\cache` with a hash-based name.
 
-### アイコンキャッシュ更新
+### Refreshing the icon cache
 
-書き換え後、`SHChangeNotify(SHCNE_ASSOCCHANGED)` を P/Invoke で呼び、シェルに反映を促す。
+After rewriting, `SHChangeNotify(SHCNE_ASSOCCHANGED)` is called via P/Invoke to prompt the shell to reflect the change.
 
-## Phase 2 — モダンメニュー対応（追加ランタイム不要のまま）
+## Phase 2 — modern menu support (still no extra runtime)
 
-R4 を満たす。R5・R6 を保つため **.NET 10 Native AOT** で実装する（Native AOT は自己完結ネイティブ DLL を生成し、.NET ランタイムの別途インストールが不要）。
+Satisfies R4. To keep R5 and R6, it is implemented with **.NET 10 Native AOT** (Native AOT produces a self-contained native DLL, so a separate .NET runtime install is not required).
 
-### 構成
+### Structure
 
-- `IExplorerCommand` を実装する COM サーバ（C#, **Native AOT**, `PublishAot=true`）。
-- **スパース MSIX** パッケージで `com.microsoft...`... の登録（`Package.appxmanifest` の `desktop4:FileExplorerContextMenus` / `com:ComServer`）。
-- 自己署名証明書でサイドロード（MSIX 署名・サイドロードは Windows 11 標準機能。ランタイムの追加ではない）。
-- アイコンの変換/適用/ライブラリ列挙ロジックは Phase 1 のコアと等価のものを C# 側に実装、または共通仕様として共有。
+- A COM server implementing `IExplorerCommand` (C#, **Native AOT**, `PublishAot=true`).
+- Registration via a **sparse MSIX** package (`desktop4:FileExplorerContextMenus` / `com:ComServer` in `Package.appxmanifest`).
+- Sideloaded with a self-signed certificate (MSIX signing / sideloading are built-in Windows 11 features, not an added runtime).
+- The icon conversion / application / library-enumeration logic is implemented on the C# side equivalently to the Phase 1 core, or shared as a common specification.
 
-### ビルド ツールチェーン
+### Build toolchain
 
-- .NET SDK 10（確認済み）
-- `makeappx` / `signtool`: 未導入のため `Microsoft.Windows.SDK.BuildTools`（NuGet, 軽量）で用意（開発者側のビルド時のみ。エンドユーザーには不要）。
+- .NET SDK 10 (confirmed)
+- `makeappx` / `signtool`: not installed, so provided via `Microsoft.Windows.SDK.BuildTools` (NuGet, lightweight) — only at the developer's build time; not needed by end users.
 
-## 既知の制限 / TODO
+## Known limitations / TODO
 
-- SVG ラスタライズは in-box に存在しないため Phase 1 は `.ico` / `.png` のみ対応。SVG は Phase 1.5 で対応（候補: 取得済み Fluent の PNG を使う / WIC / 軽量変換）。
-- Phase 1 のメニューはレガシー側に表示（モダンメニューは Phase 2）。
-- マルチ言語表示名・アイコン索引（`,N`）対応は今後検討。
+- SVG rasterization does not exist in-box, so Phase 1 supports only `.ico` / `.png`. SVG is targeted for Phase 1.5 (candidates: use the already-fetched Fluent PNGs / WIC / a lightweight converter).
+- The Phase 1 menu appears on the legacy side (the modern menu is Phase 2).
+- Multi-language display names and icon index (`,N`) support are to be considered later.

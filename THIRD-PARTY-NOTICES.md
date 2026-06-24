@@ -1,6 +1,8 @@
-# Third-Party Notices
+# Third-Party Notices / サードパーティ通知
 
 This project bundles and/or downloads assets from the following third-party projects.
+
+本プロジェクトは、以下のサードパーティ プロジェクトのアセットを同梱および/または取得しています。各ライセンスの全文は、正本として原文（英語）のまま掲載します。
 
 ## Microsoft Fluent UI Emoji
 

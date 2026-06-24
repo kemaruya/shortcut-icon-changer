@@ -1,3 +1,7 @@
+[English](#en) | [日本語](#ja)
+
+<a id="en"></a>
+
 # Privacy Policy — Shortcut Icon Changer
 
 _Last updated: 2026-06-23_
@@ -38,6 +42,8 @@ Questions about privacy can be raised as an issue on the project repository:
 https://github.com/kemaruya/shortcut-icon-changer/issues
 
 ---
+
+<a id="ja"></a>
 
 # プライバシー ポリシー — Shortcut Icon Changer
 
